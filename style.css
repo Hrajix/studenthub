@@ -10,4 +10,6 @@ img {
 
 .navbar {
     background-color: #090c14;
+    height: 100px;
+    width: 500px;
 }
