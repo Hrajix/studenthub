@@ -1,0 +1,28 @@
+body {
+    background-color: #111827;
+}
+
+img {
+    display: block;
+    margin: auto;
+    width: 50%;
+}
+
+.navbar {
+    background-color: #090c14;
+    height: 100px;
+    width: 500px;
+    border-radius: 20px;
+    margin: auto;
+    bottom: 33px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    transition: 0.3s;
+    transition-timing-function: ease-in-out;
+}
+
+.navbar:hover {
+    transform: scale(1.2);
+    background-color: #0c0f1a;
+}
