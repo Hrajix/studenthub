@@ -21,8 +21,3 @@ img {
     transition: 0.3s;
     transition-timing-function: ease-in-out;
 }
-
-.navbar:hover {
-    transform: scale(1.2);
-    background-color: #0c0f1a;
-}
