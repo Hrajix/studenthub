@@ -15,10 +15,10 @@ body {
 }
 
 .nadpis1 {
-    font-size: xx-large;
     text-align: center;
     color: white;
     font-size: 70px;
+    margin: 2px;
 }
 
 .white {
