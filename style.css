@@ -1,3 +1,9 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
 body {
     background-color: #111827;
     font-family: 'Roboto', sans-serif;
@@ -18,7 +24,7 @@ body {
     text-align: center;
     color: white;
     font-size: 70px;
-    margin: 2px;
+    padding: 10px;
 }
 
 .white {
@@ -32,4 +38,6 @@ body {
 .nadpis2 {
     text-align: center;
     color: white;
+    padding: 5px;
+    padding-bottom: 10px;
 }
