@@ -2,3 +2,34 @@ body {
     background-color: #111827;
     font-family: 'Roboto', sans-serif;
 }
+
+.header {
+    background-color: #0c0f1a;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 12px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+.nadpis1 {
+    font-size: xx-large;
+    text-align: center;
+    color: white;
+    font-size: 70px;
+}
+
+.white {
+    color: white;
+}
+
+.orange {
+    color: rgb(210, 98, 0);
+}
+
+.nadpis2 {
+    text-align: center;
+    color: white;
+}
