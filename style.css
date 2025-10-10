@@ -66,6 +66,7 @@ a{
     font-weight: 400;
     letter-spacing: 8px;
     transform: scaleY(0.95);
+    cursor: pointer;
 }
 
 .orange {
