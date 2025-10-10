@@ -78,6 +78,7 @@ img {
   transition: transform 200ms ease, opacity 200ms ease;
   cursor: pointer;
   padding: 6px;
+  scale: 1.5;
 }
 
 .list-item-name {
@@ -93,7 +94,7 @@ img {
 
 .list-item:hover {
   color: var(--highlight);
-  transform: translateY(-6px) scale(1.33);
+  transform: translateY(-6px) scale(0.9);
 }
 
 .list-item:hover .list-item-name {
