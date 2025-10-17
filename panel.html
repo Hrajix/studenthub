@@ -48,6 +48,41 @@
     </div>
 
 
+    <div class="container">
+        <!-- Levý panel: seznam předmětů -->
+        <div class="subjects-panel">
+        <h2>Předměty</h2>
+        <input type="text" id="subjectInput" placeholder="Název předmětu">
+        <button id="addSubjectBtn">Přidat</button>
+        <ul id="subjectList"></ul>
+        </div>
 
+        <!-- Pravý panel: rozvrh -->
+        <div class="schedule">
+        <h2>Rozvrh hodin</h2>
+        <table id="timetable">
+            <thead>
+            <tr>
+                <th>Den</th>
+                <th>1. hodina</th>
+                <th>2. hodina</th>
+                <th>3. hodina</th>
+                <th>4. hodina</th>
+                <th>5. hodina</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr><td>Pondělí</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>Úterý</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>Středa</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>Čtvrtek</td><td></td><td></td><td></td><td></td><td></td></tr>
+            <tr><td>Pátek</td><td></td><td></td><td></td><td></td><td></td></tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+
+
+    <script src="panel.js"></script>
 </body>
 </html>
