@@ -1,0 +1,191 @@
+import { Calendar, Clock, BookOpen, AlertCircle, TrendingUp } from "lucide-react";
+import { Link } from "react-router";
+
+export default function Dashboard() {
+  const todaySchedule = [
+    { id: 1, subject: "Matematika", time: "08:00 - 09:30", teacher: "Mgr. Novák", color: "bg-blue-500", room: "A201" },
+    { id: 2, subject: "Čeština", time: "09:45 - 11:15", teacher: "Mgr. Svobodová", color: "bg-green-500", room: "B105" },
+    { id: 3, subject: "Fyzika", time: "11:30 - 13:00", teacher: "Dr. Dvořák", color: "bg-purple-500", room: "C302" },
+  ];
+
+  const upcomingTests = [
+    { id: 1, subject: "Matematika", date: "2026-03-22", type: "Písemka", topic: "Integrály", daysLeft: 4 },
+    { id: 2, subject: "Angličtina", date: "2026-03-25", type: "Test", topic: "Grammar", daysLeft: 7 },
+    { id: 3, subject: "Dějepis", date: "2026-03-28", type: "Ústní", topic: "Druhá světová válka", daysLeft: 10 },
+  ];
+
+  const quickNotes = [
+    { id: 1, subject: "Matematika", note: "Nezapomenout na domácí úkol str. 45-47", time: "před 2 hodinami" },
+    { id: 2, subject: "Fyzika", note: "Připravit prezentaci o kvantové mechanice", time: "včera" },
+  ];
+
+  const stats = [
+    { label: "Hotové úkoly", value: "12/15", icon: BookOpen, color: "text-green-500" },
+    { label: "Nadcházející testy", value: "3", icon: AlertCircle, color: "text-orange-500" },
+    { label: "Studijní materiály", value: "47", icon: TrendingUp, color: "text-blue-500" },
+  ];
+
+  return (
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          Vítej zpět! 👋
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">
+          Dnes je středa, 18. března 2026
+        </p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {stats.map((stat, index) => (
+          <div
+            key={index}
+            className="bg-white dark:bg-gray-800 rounded-xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 dark:text-gray-400 text-sm mb-1">{stat.label}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
+              </div>
+              <div className={`p-3 rounded-xl bg-gray-50 dark:bg-gray-700 ${stat.color}`}>
+                <stat.icon className="w-6 h-6" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Today's Schedule */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Dnešní rozvrh
+              </h2>
+              <Link
+                to="/rozvrh"
+                className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                Zobrazit vše
+              </Link>
+            </div>
+          </div>
+          <div className="p-6 space-y-4">
+            {todaySchedule.map((item) => (
+              <div
+                key={item.id}
+                className="flex items-start gap-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div className={`w-1 h-full ${item.color} rounded-full`}></div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">
+                      {item.subject}
+                    </h3>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {item.room}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      {item.time}
+                    </span>
+                    <span>{item.teacher}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Upcoming Tests */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Nadcházející testy
+              </h2>
+              <Link
+                to="/testy"
+                className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                Zobrazit vše
+              </Link>
+            </div>
+          </div>
+          <div className="p-6 space-y-4">
+            {upcomingTests.map((test) => (
+              <div
+                key={test.id}
+                className="flex items-center justify-between p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900 dark:text-white mb-1">
+                    {test.subject}
+                  </h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                    {test.topic}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                    <Calendar className="w-3 h-3" />
+                    {test.date}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="inline-flex items-center px-3 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 text-xs font-medium">
+                    {test.daysLeft} dní
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {test.type}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick Notes */}
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm lg:col-span-2">
+          <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                Rychlé poznámky
+              </h2>
+              <Link
+                to="/zapisnik"
+                className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
+              >
+                Zobrazit vše
+              </Link>
+            </div>
+          </div>
+          <div className="p-6 space-y-3">
+            {quickNotes.map((note) => (
+              <div
+                key={note.id}
+                className="flex items-start gap-3 p-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-800/30"
+              >
+                <div className="w-2 h-2 rounded-full bg-yellow-500 mt-2"></div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-semibold text-gray-900 dark:text-white">
+                      {note.subject}
+                    </span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      • {note.time}
+                    </span>
+                  </div>
+                  <p className="text-gray-700 dark:text-gray-300">{note.note}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
