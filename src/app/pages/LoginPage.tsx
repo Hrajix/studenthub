@@ -9,7 +9,7 @@ export default function LoginPage() {
     // Check if user is already logged in
     const isLoggedIn = localStorage.getItem("studenthub_user");
     if (isLoggedIn) {
-      navigate("/");
+      navigate("/panel");
     }
   }, [navigate]);
 
@@ -21,7 +21,7 @@ export default function LoginPage() {
       avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Jan",
     };
     localStorage.setItem("studenthub_user", JSON.stringify(mockUser));
-    navigate("/");
+    navigate("/panel");
   };
 
   return (
@@ -30,7 +30,7 @@ export default function LoginPage() {
       
       {/* Back to Home Button */}
       <button
-        onClick={() => navigate("/home")}
+        onClick={() => navigate("/")}
         className="absolute top-6 left-6 flex items-center gap-2 text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
       >
         <ArrowLeft className="w-5 h-5" />

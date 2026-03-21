@@ -20,7 +20,7 @@ export default function LandingPage() {
     // Check if user is already logged in
     const isLoggedIn = localStorage.getItem("studenthub_user");
     if (isLoggedIn) {
-      navigate("/");
+      navigate("/panel");
     }
   }, [navigate]);
 
@@ -137,7 +137,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             {/* Logo */}
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("/")}>
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("/panel")}>
               <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
                 <span className="text-white text-xl">📚</span>
               </div>
