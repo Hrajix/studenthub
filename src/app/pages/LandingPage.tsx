@@ -4,20 +4,32 @@ import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 // 1. Importujeme HashLink
 import { HashLink } from 'react-router-hash-link';
-import { useUser } from "@clerk/clerk-react";
+import { supabase } from "../../lib/supabase";
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { isSignedIn, isLoaded } = useUser();
-
+  
+  // 2. Nahraď Clerk stav vlastním stavem
   useEffect(() => {
-    if (isLoaded && isSignedIn) {
-      // Pokud je přihlášený a je na hlavní stránce, pošli ho do panelu
-      navigate("/panel");
-    }
-  }, [isSignedIn, isLoaded, navigate]);
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Pokud je uživatel přihlášený, pošli ho do panelu
+        navigate("/panel");
+      }
+    };
+
+    checkUser();
+
+    // Volitelně: poslouchej změny stavu
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) navigate("/panel");
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   useEffect(() => {
     const handleScroll = () => {
