@@ -13,7 +13,7 @@ import ClassDetail from "./pages/ClassDetail";
 // 2. Použij createHashRouter místo createBrowserRouter
 export const router = createHashRouter([
   {
-    path: "/home",
+    path: "/",
     Component: LandingPage,
   },
   {
@@ -21,7 +21,7 @@ export const router = createHashRouter([
     Component: LoginPage,
   },
   {
-    path: "/",
+    path: "/panel",
     Component: Layout,
     children: [
       { index: true, Component: Dashboard },
