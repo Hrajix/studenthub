@@ -16,7 +16,7 @@ export default function Layout() {
   useEffect(() => {
     const userData = localStorage.getItem("studenthub_user");
     if (!userData) {
-      navigate("/home");
+      navigate("/");
     } else {
       setUser(JSON.parse(userData));
     }
@@ -24,7 +24,7 @@ export default function Layout() {
 
   const handleLogout = () => {
     localStorage.removeItem("studenthub_user");
-    navigate("/home");
+    navigate("/");
   };
 
   const toggleTheme = () => {
@@ -34,11 +34,11 @@ export default function Layout() {
   if (!user) return null;
 
   const navItems = [
-    { to: "/", icon: Calendar, label: "Dashboard", exact: true },
-    { to: "/rozvrh", icon: Calendar, label: "Rozvrh" },
-    { to: "/zapisnik", icon: BookOpen, label: "Zápisník" },
-    { to: "/materialy", icon: FolderOpen, label: "Materiály" },
-    { to: "/testy", icon: GraduationCap, label: "Testy" },
+    { to: "/panel", icon: Calendar, label: "Dashboard", exact: true },
+    { to: "/panel/rozvrh", icon: Calendar, label: "Rozvrh" },
+    { to: "/panel/zapisnik", icon: BookOpen, label: "Zápisník" },
+    { to: "/panel/materialy", icon: FolderOpen, label: "Materiály" },
+    { to: "/panel/testy", icon: GraduationCap, label: "Testy" },
   ];
 
   return (
