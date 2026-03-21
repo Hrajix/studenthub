@@ -2,28 +2,31 @@ import { Outlet, NavLink, useNavigate } from "react-router";
 import { Calendar, BookOpen, FolderOpen, GraduationCap, Bell, LogOut, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import { useUser, useClerk } from "@clerk/clerk-react"; // Přidán useClerk pro odhlášení
 
 export default function Layout() {
   const navigate = useNavigate();
-  const [user, setUser] = useState<any>(null);
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  
+  // 1. Získání dat o uživateli přímo z Clerku
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // 2. Ochrana routy - pokud Clerk dočte a uživatel není přihlášen, šup na úvod
   useEffect(() => {
-    const userData = localStorage.getItem("studenthub_user");
-    if (!userData) {
+    if (isLoaded && !isSignedIn) {
       navigate("/");
-    } else {
-      setUser(JSON.parse(userData));
     }
-  }, [navigate]);
+  }, [isLoaded, isSignedIn, navigate]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("studenthub_user");
+  const handleLogout = async () => {
+    // 3. Odhlášení přes Clerk místo promazání localStorage
+    await signOut();
     navigate("/");
   };
 
@@ -31,7 +34,17 @@ export default function Layout() {
     setTheme(theme === "dark" ? "light" : "dark");
   };
 
-  if (!user) return null;
+  // 4. Loading stav - extrémně důležité, aby tě to nevyhodilo dřív, než Clerk odpoví
+  if (!isLoaded) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+      </div>
+    );
+  }
+
+  // Pokud nejsme přihlášení, nevykreslujeme nic (useEffect nás přesměruje)
+  if (!isSignedIn) return null;
 
   const navItems = [
     { to: "/panel", icon: Calendar, label: "Dashboard", exact: true },
@@ -83,20 +96,20 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* User Profile */}
+        {/* User Profile - Data se berou z user objektu od Clerku */}
         <div className="p-4 border-t border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3 mb-3">
             <img
-              src={user.avatar}
-              alt={user.name}
-              className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700"
+              src={user?.imageUrl} 
+              alt={user?.fullName || "User"}
+              className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 object-cover"
             />
             <div className="flex-1 min-w-0">
               <p className="font-medium text-gray-900 dark:text-white truncate">
-                {user.name}
+                {user?.fullName}
               </p>
               <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {user.email}
+                {user?.primaryEmailAddress?.emailAddress}
               </p>
             </div>
           </div>

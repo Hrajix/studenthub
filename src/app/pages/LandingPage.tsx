@@ -4,11 +4,20 @@ import { useState, useEffect } from "react";
 import { motion } from "motion/react";
 // 1. Importujeme HashLink
 import { HashLink } from 'react-router-hash-link';
+import { useUser } from "@clerk/clerk-react";
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const { isSignedIn, isLoaded } = useUser();
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      // Pokud je přihlášený a je na hlavní stránce, pošli ho do panelu
+      navigate("/panel");
+    }
+  }, [isSignedIn, isLoaded, navigate]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -17,13 +26,6 @@ export default function LandingPage() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-
-  useEffect(() => {
-    const isLoggedIn = localStorage.getItem("studenthub_user");
-    if (isLoggedIn) {
-      navigate("/panel");
-    }
-  }, [navigate]);
 
   const handleGetStarted = () => {
     navigate("/login");

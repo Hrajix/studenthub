@@ -9,6 +9,7 @@ import Notes from "./pages/Notes";
 import Materials from "./pages/Materials";
 import Tests from "./pages/Tests";
 import ClassDetail from "./pages/ClassDetail";
+import { AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 
 // 2. Použij createHashRouter místo createBrowserRouter
 export const router = createHashRouter([
@@ -31,5 +32,9 @@ export const router = createHashRouter([
       { path: "materialy", Component: Materials },
       { path: "testy", Component: Tests },
     ],
+  },
+  {
+    path: "/sso-callback",
+    Component: AuthenticateWithRedirectCallback, // Clerk se postará o zbytek
   },
 ]);
