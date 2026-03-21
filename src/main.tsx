@@ -9,3 +9,8 @@ createRoot(document.getElementById('root')!).render(
     <RouterProvider router={router} />
   </StrictMode>,
 )
+
+if (window.location.search.includes('error=access_denied')) {
+  // Pokud detekujeme, že uživatel klikl na "Zrušit", vyčistíme URL a hodíme ho na home
+  window.location.href = window.location.origin + '/#/';
+}
