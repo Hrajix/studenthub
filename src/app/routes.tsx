@@ -1,4 +1,5 @@
-import { createBrowserRouter } from "react-router";
+// 1. Změň import na Hash variantu
+import { createHashRouter } from "react-router"; 
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import Layout from "./components/Layout";
@@ -9,7 +10,8 @@ import Materials from "./pages/Materials";
 import Tests from "./pages/Tests";
 import ClassDetail from "./pages/ClassDetail";
 
-export const router = createBrowserRouter([
+// 2. Použij createHashRouter místo createBrowserRouter
+export const router = createHashRouter([
   {
     path: "/home",
     Component: LandingPage,

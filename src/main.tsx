@@ -1,7 +1,11 @@
+import { createRoot } from "react-dom/client";
+import { HashRouter } from "react-router-dom"; // <-- 1. Přidej import
+import App from "./app/App.tsx";
+import "./styles/index.css";
 
-  import { createRoot } from "react-dom/client";
-  import App from "./app/App.tsx";
-  import "./styles/index.css";
-
-  createRoot(document.getElementById("root")!).render(<App />);
-  
+// 2. Obal App komponentu do HashRouteru
+createRoot(document.getElementById("root")!).render(
+  <HashRouter>
+    <App />
+  </HashRouter>
+);
