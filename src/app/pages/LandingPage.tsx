@@ -2,22 +2,30 @@ import { useNavigate } from "react-router";
 import { Calendar, BookOpen, FolderOpen, GraduationCap, Chrome, ArrowRight, Check, Sparkles, Users, Zap, Shield, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-// 1. Importujeme HashLink
 import { HashLink } from 'react-router-hash-link';
-import { useUser } from "@clerk/clerk-react";
+import { supabase } from "../../lib/supabase";
 
 export default function LandingPage() {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const { isSignedIn, isLoaded } = useUser();
-
+  
   useEffect(() => {
-    if (isLoaded && isSignedIn) {
-      // Pokud je přihlášený a je na hlavní stránce, pošli ho do panelu
-      navigate("/panel");
-    }
-  }, [isSignedIn, isLoaded, navigate]);
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        navigate("/panel");
+      }
+    };
+
+    checkUser();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) navigate("/panel");
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -606,11 +614,28 @@ export default function LandingPage() {
             </div>
 
             <div>
-              <h4 className="font-bold text-white mb-6 uppercase text-xs tracking-widest">Produkt</h4>
-              <ul className="space-y-4">
-                {/* Footer odkazy také na HashLink */}
+              <h4 className="font-bold text-white mb-4">Produkt</h4>
+              <ul className="space-y-2">
                 <li><HashLink smooth to="/#features" className="text-gray-400 hover:text-white transition-colors text-sm">Funkce</HashLink></li>
                 <li><HashLink smooth to="/#how-it-works" className="text-gray-400 hover:text-white transition-colors text-sm">Jak to funguje</HashLink></li>
+                <li><HashLink smooth to="#" className="text-gray-400 hover:text-white transition-colors text-sm">Ceny</HashLink></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-white mb-4">Podpora</h4>
+              <ul className="space-y-2">
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Nápověda</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Dokumentace</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Kontakt</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-bold text-white mb-4">Právní</h4>
+              <ul className="space-y-2">
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Podmínky použití</a></li>
+                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Ochrana soukromí</a></li>
               </ul>
             </div>
           </div>

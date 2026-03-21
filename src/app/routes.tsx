@@ -1,4 +1,3 @@
-// 1. Změň import na Hash variantu
 import { createHashRouter } from "react-router"; 
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
@@ -9,9 +8,7 @@ import Notes from "./pages/Notes";
 import Materials from "./pages/Materials";
 import Tests from "./pages/Tests";
 import ClassDetail from "./pages/ClassDetail";
-import { AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 
-// 2. Použij createHashRouter místo createBrowserRouter
 export const router = createHashRouter([
   {
     path: "/",
@@ -32,9 +29,5 @@ export const router = createHashRouter([
       { path: "materialy", Component: Materials },
       { path: "testy", Component: Tests },
     ],
-  },
-  {
-    path: "/sso-callback",
-    Component: AuthenticateWithRedirectCallback, // Clerk se postará o zbytek
   },
 ]);
