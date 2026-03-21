@@ -171,7 +171,7 @@ function ScheduleContent() {
   };
 
   const handleClassClick = (classId: string) => {
-    navigate(`/rozvrh/${classId}`);
+    navigate(`/panel/rozvrh/${classId}`);
   };
 
   const getClassForSlot = (day: number, timeSlot: number) => {

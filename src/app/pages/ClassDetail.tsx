@@ -56,7 +56,7 @@ export default function ClassDetail() {
     <div className="p-6 max-w-5xl mx-auto">
       {/* Back Button */}
       <button
-        onClick={() => navigate("/rozvrh")}
+        onClick={() => navigate("/panel/rozvrh")}
         className="flex items-center gap-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white mb-6 transition-colors"
       >
         <ArrowLeft className="w-5 h-5" />
