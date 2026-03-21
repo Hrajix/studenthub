@@ -2,6 +2,8 @@ import { useNavigate } from "react-router";
 import { Calendar, BookOpen, FolderOpen, GraduationCap, Chrome, ArrowRight, Check, Sparkles, Users, Zap, Shield, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion } from "motion/react";
+// 1. Importujeme HashLink
+import { HashLink } from 'react-router-hash-link';
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -17,7 +19,6 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    // Check if user is already logged in
     const isLoggedIn = localStorage.getItem("studenthub_user");
     if (isLoggedIn) {
       navigate("/panel");
@@ -125,7 +126,7 @@ export default function LandingPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900">
+    <div className="min-h-screen bg-white dark:bg-gray-900 scroll-smooth">
       {/* Navigation */}
       <nav
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
@@ -137,7 +138,7 @@ export default function LandingPage() {
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
             {/* Logo */}
-            <div className="flex items-center gap-3 cursor-pointer" onClick={() => navigate("/panel")}>
+            <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
               <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center shadow-md">
                 <span className="text-white text-xl">📚</span>
               </div>
@@ -146,12 +147,14 @@ export default function LandingPage() {
 
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center gap-8">
-              <a href="#features" className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+              {/* Upravené na HashLink */}
+              <HashLink smooth to="/#features" className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                 Funkce
-              </a>
-              <a href="#how-it-works" className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+              </HashLink>
+              <HashLink smooth to="/#how-it-works" className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
                 Jak to funguje
-              </a>
+              </HashLink>
+              
               <button
                 onClick={() => navigate("/login")}
                 className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
@@ -182,20 +185,22 @@ export default function LandingPage() {
               animate={{ opacity: 1, y: 0 }}
               className="md:hidden mt-4 pb-4 space-y-3"
             >
-              <a
-                href="#features"
-                className="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-                onClick={() => setMobileMenuOpen(false)}
+              {/* Upravené na HashLink s onClick pro zavření menu */}
+              <HashLink 
+                smooth to="/#features" 
+                onClick={() => setMobileMenuOpen(false)} 
+                className="block w-full text-left px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
               >
                 Funkce
-              </a>
-              <a
-                href="#how-it-works"
-                className="block px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-                onClick={() => setMobileMenuOpen(false)}
+              </HashLink>
+              <HashLink 
+                smooth to="/#how-it-works" 
+                onClick={() => setMobileMenuOpen(false)} 
+                className="block w-full text-left px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
               >
                 Jak to funguje
-              </a>
+              </HashLink>
+              
               <button
                 onClick={() => {
                   navigate("/login");
@@ -261,7 +266,7 @@ export default function LandingPage() {
                   className="px-8 py-4 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-900 dark:text-white border-2 border-gray-200 dark:border-gray-700 rounded-xl transition-all flex items-center justify-center gap-2"
                 >
                   <Chrome className="w-5 h-5" />
-                  <span className="font-medium">Continue with Google</span>
+                  <span className="font-medium">Pokračovat s Googlem</span>
                 </button>
               </div>
 
@@ -293,7 +298,6 @@ export default function LandingPage() {
                   </div>
                 </div>
                 <div className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900 p-8">
-                  {/* Mini Dashboard Preview */}
                   <div className="space-y-4">
                     <div className="flex items-center gap-3 mb-6">
                       <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
@@ -306,35 +310,41 @@ export default function LandingPage() {
                     </div>
                     
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                      <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 shadow-sm">
                         <div className="flex items-center gap-2 mb-2">
                           <Calendar className="w-4 h-4 text-blue-500" />
                           <span className="text-sm font-medium text-gray-900 dark:text-white">Rozvrh</span>
                         </div>
-                        <div className="h-1 bg-blue-500 rounded-full w-3/4"></div>
+                        <div className="h-1.5 bg-blue-500 rounded-full w-3/4"></div>
                       </div>
-                      <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                      <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 shadow-sm">
                         <div className="flex items-center gap-2 mb-2">
                           <BookOpen className="w-4 h-4 text-green-500" />
                           <span className="text-sm font-medium text-gray-900 dark:text-white">Poznámky</span>
                         </div>
-                        <div className="h-1 bg-green-500 rounded-full w-2/3"></div>
+                        <div className="h-1.5 bg-green-500 rounded-full w-2/3"></div>
                       </div>
                     </div>
 
-                    <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600">
+                    <div className="bg-white dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600 shadow-sm">
                       <div className="flex items-center justify-between mb-3">
                         <span className="text-sm font-medium text-gray-900 dark:text-white">Dnešní rozvrh</span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">3 hodiny</span>
                       </div>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-3">
                           <div className="w-1 h-8 bg-blue-500 rounded-full"></div>
-                          <div className="flex-1 text-xs text-gray-600 dark:text-gray-400">08:00 - Matematika</div>
+                          <div>
+                            <div className="text-xs font-medium text-gray-900 dark:text-white">08:00 - Matematika</div>
+                            <div className="text-[10px] text-gray-500">Učebna 204</div>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           <div className="w-1 h-8 bg-green-500 rounded-full"></div>
-                          <div className="flex-1 text-xs text-gray-600 dark:text-gray-400">09:45 - Čeština</div>
+                          <div>
+                            <div className="text-xs font-medium text-gray-900 dark:text-white">09:45 - Český jazyk</div>
+                            <div className="text-[10px] text-gray-500">Učebna 112</div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -342,11 +352,10 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              {/* Floating Elements */}
               <motion.div
                 animate={{ y: [0, -10, 0] }}
                 transition={{ duration: 3, repeat: Infinity }}
-                className="absolute -top-4 -right-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 border border-gray-200 dark:border-gray-700"
+                className="absolute -top-4 -right-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 border border-gray-200 dark:border-gray-700 z-20"
               >
                 <div className="flex items-center gap-2">
                   <Sparkles className="w-5 h-5 text-purple-500" />
@@ -357,7 +366,7 @@ export default function LandingPage() {
               <motion.div
                 animate={{ y: [0, 10, 0] }}
                 transition={{ duration: 3, repeat: Infinity, delay: 0.5 }}
-                className="absolute -bottom-4 -left-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 border border-gray-200 dark:border-gray-700"
+                className="absolute -bottom-4 -left-4 bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 border border-gray-200 dark:border-gray-700 z-20"
               >
                 <div className="flex items-center gap-2">
                   <Check className="w-5 h-5 text-green-500" />
@@ -370,7 +379,7 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-20 px-6 bg-white dark:bg-gray-900 scroll-mt-20">
+      <section id="features" className="py-24 px-6 bg-white dark:bg-gray-900 scroll-mt-20">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <motion.div
@@ -383,7 +392,7 @@ export default function LandingPage() {
                 Vše, co potřebuješ ke studiu
               </h2>
               <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                Komplexní sada nástrojů pro organizaci studijního života
+                Komplexní sada nástrojů navržená tak, aby ti usnadnila každodenní studentský život.
               </p>
             </motion.div>
           </div>
@@ -398,14 +407,14 @@ export default function LandingPage() {
                 transition={{ duration: 0.6, delay: index * 0.1 }}
                 className="group"
               >
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all h-full">
-                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform`}>
+                <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all h-full hover:-translate-y-1">
+                  <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${feature.color} flex items-center justify-center mb-6 group-hover:scale-110 transition-transform shadow-lg`}>
                     <feature.icon className="w-7 h-7 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
                     {feature.title}
                   </h3>
-                  <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                  <p className="text-gray-600 dark:text-gray-400 leading-relaxed text-sm">
                     {feature.description}
                   </p>
                 </div>
@@ -416,7 +425,7 @@ export default function LandingPage() {
       </section>
 
       {/* How It Works Section */}
-      <section id="how-it-works" className="py-20 px-6 bg-gray-50 dark:bg-gray-800 scroll-mt-20">
+      <section id="how-it-works" className="py-24 px-6 bg-gray-50 dark:bg-gray-800 scroll-mt-20">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <motion.div
@@ -429,7 +438,7 @@ export default function LandingPage() {
                 Jak to funguje
               </h2>
               <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                Začni během 3 jednoduchých kroků
+                Začni používat StudentHub během pár minut.
               </p>
             </motion.div>
           </div>
@@ -448,17 +457,15 @@ export default function LandingPage() {
                   <div className="hidden md:block absolute top-16 left-full w-full h-0.5 bg-gradient-to-r from-indigo-500 to-purple-600 opacity-20"></div>
                 )}
                 
-                <div className="bg-white dark:bg-gray-700 rounded-2xl p-8 border border-gray-200 dark:border-gray-600 hover:shadow-xl transition-all h-full">
-                  <div className="text-6xl font-bold text-indigo-100 dark:text-indigo-900/30 mb-4">
-                    {step.number}
-                  </div>
-                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-6">
+                <div className="bg-white dark:bg-gray-700 rounded-2xl p-8 border border-gray-200 dark:border-gray-600 shadow-sm hover:shadow-md transition-all h-full text-center">
+                  <div className="text-5xl font-black text-indigo-500/10 mb-2">{step.number}</div>
+                  <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-6 mx-auto shadow-md">
                     <step.icon className="w-7 h-7 text-white" />
                   </div>
                   <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
                     {step.title}
                   </h3>
-                  <p className="text-gray-600 dark:text-gray-400 leading-relaxed">
+                  <p className="text-gray-600 dark:text-gray-400 text-sm leading-relaxed">
                     {step.description}
                   </p>
                 </div>
@@ -469,25 +476,9 @@ export default function LandingPage() {
       </section>
 
       {/* Benefits Section */}
-      <section className="py-20 px-6 bg-white dark:bg-gray-900">
+      <section className="py-24 px-6 bg-white dark:bg-gray-900">
         <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-            >
-              <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-                Proč StudentHub?
-              </h2>
-              <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                Výhody, které oceníš každý den
-              </p>
-            </motion.div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
             {benefits.map((benefit, index) => (
               <motion.div
                 key={benefit.title}
@@ -495,18 +486,17 @@ export default function LandingPage() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.6, delay: index * 0.1 }}
+                className="text-center"
               >
-                <div className="text-center">
-                  <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center mx-auto mb-4">
-                    <benefit.icon className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
-                  </div>
-                  <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">
-                    {benefit.title}
-                  </h3>
-                  <p className="text-gray-600 dark:text-gray-400">
-                    {benefit.description}
-                  </p>
+                <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center mx-auto mb-6">
+                  <benefit.icon className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
                 </div>
+                <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3">
+                  {benefit.title}
+                </h3>
+                <p className="text-gray-600 dark:text-gray-400 text-sm">
+                  {benefit.description}
+                </p>
               </motion.div>
             ))}
           </div>
@@ -514,53 +504,45 @@ export default function LandingPage() {
       </section>
 
       {/* Testimonials Section */}
-      <section className="py-20 px-6 bg-gray-50 dark:bg-gray-800">
+      <section className="py-24 px-6 bg-gray-50 dark:bg-gray-800">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6 }}
-            >
-              <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
-                Co říkají studenti
-              </h2>
-              <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
-                Přidej se k tisícům spokojených uživatelů
-              </p>
-            </motion.div>
+            <h2 className="text-4xl md:text-5xl font-bold text-gray-900 dark:text-white mb-4">
+              Co říkají studenti
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+              Přidej se k tisícům spokojených uživatelů.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             {testimonials.map((testimonial, index) => (
               <motion.div
                 key={testimonial.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.95 }}
+                whileInView={{ opacity: 1, scale: 1 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.6, delay: index * 0.1 }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                className="bg-white dark:bg-gray-700 rounded-2xl p-8 border border-gray-200 dark:border-gray-600 shadow-sm flex flex-col h-full"
               >
-                <div className="bg-white dark:bg-gray-700 rounded-2xl p-8 border border-gray-200 dark:border-gray-600 h-full">
-                  <div className="flex items-center gap-4 mb-4">
-                    <img
-                      src={testimonial.avatar}
-                      alt={testimonial.name}
-                      className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-600"
-                    />
-                    <div>
-                      <h4 className="font-bold text-gray-900 dark:text-white">
-                        {testimonial.name}
-                      </h4>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {testimonial.role}
-                      </p>
-                    </div>
+                <div className="flex items-center gap-4 mb-6">
+                  <img
+                    src={testimonial.avatar}
+                    alt={testimonial.name}
+                    className="w-12 h-12 rounded-full bg-indigo-100"
+                  />
+                  <div>
+                    <h4 className="font-bold text-gray-900 dark:text-white">
+                      {testimonial.name}
+                    </h4>
+                    <p className="text-sm text-gray-500">
+                      {testimonial.role}
+                    </p>
                   </div>
-                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed">
-                    "{testimonial.content}"
-                  </p>
                 </div>
+                <p className="text-gray-600 dark:text-gray-300 italic flex-grow">
+                  "{testimonial.content}"
+                </p>
               </motion.div>
             ))}
           </div>
@@ -568,98 +550,71 @@ export default function LandingPage() {
       </section>
 
       {/* Final CTA Section */}
-      <section className="py-20 px-6 bg-gradient-to-br from-indigo-500 to-purple-600 relative overflow-hidden">
-        <div className="absolute inset-0 bg-grid-pattern opacity-10"></div>
+      <section className="py-24 px-6 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-purple-700 z-0"></div>
+        <div className="absolute inset-0 bg-grid-pattern opacity-10 z-0"></div>
         
-        <div className="max-w-4xl mx-auto text-center relative z-10">
+        <div className="max-w-4xl mx-auto text-center relative z-10 text-white">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">
-              Začni používat StudentHub ještě dnes
+            <h2 className="text-4xl md:text-5xl font-bold mb-6">
+              Připraven ovládnout své studium?
             </h2>
-            <p className="text-xl text-indigo-100 mb-8 leading-relaxed">
-              Připoj se ke studentům, kteří již zvýšili svou produktivitu a organizaci studia
+            <p className="text-xl text-indigo-100 mb-10 leading-relaxed">
+              Zaregistruj se zdarma a začni používat všechny nástroje StudentHubu ještě dnes.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 onClick={handleGetStarted}
-                className="group px-8 py-4 bg-white text-indigo-600 rounded-xl transition-all hover:shadow-2xl flex items-center justify-center gap-2 font-medium"
+                className="group px-10 py-4 bg-white text-indigo-600 rounded-xl transition-all hover:shadow-2xl flex items-center justify-center gap-2 font-bold"
               >
-                <span>Vytvořit účet</span>
+                <span>Vytvořit účet zdarma</span>
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </button>
               <button
                 onClick={() => navigate("/login")}
-                className="px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white border-2 border-white/20 rounded-xl transition-all flex items-center justify-center gap-2 font-medium"
+                className="px-10 py-4 bg-indigo-700 hover:bg-indigo-800 text-white border-2 border-white/20 rounded-xl transition-all flex items-center justify-center gap-2 font-medium"
               >
                 Přihlásit se
               </button>
-            </div>
-
-            <div className="mt-8 flex items-center justify-center gap-8 text-indigo-100">
-              <div className="flex items-center gap-2">
-                <Check className="w-5 h-5" />
-                <span>Bez kreditní karty</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="w-5 h-5" />
-                <span>Zdarma navždy</span>
-              </div>
             </div>
           </motion.div>
         </div>
       </section>
 
       {/* Footer */}
-      <footer className="py-12 px-6 bg-gray-900 dark:bg-black border-t border-gray-800">
+      <footer className="py-16 px-6 bg-gray-900 border-t border-gray-800">
         <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
-            <div>
-              <div className="flex items-center gap-3 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
+            <div className="col-span-1 md:col-span-1">
+              <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center">
                   <span className="text-white text-xl">📚</span>
                 </div>
                 <span className="text-xl font-bold text-white">StudentHub</span>
               </div>
-              <p className="text-gray-400 text-sm">
-                Moderní nástroj pro organizaci studijního života
+              <p className="text-gray-400 text-sm leading-relaxed">
+                Moderní platforma pro studenty, kteří chtějí mít své studium pod kontrolou.
               </p>
             </div>
 
             <div>
-              <h4 className="font-bold text-white mb-4">Produkt</h4>
-              <ul className="space-y-2">
-                <li><a href="#features" className="text-gray-400 hover:text-white transition-colors text-sm">Funkce</a></li>
-                <li><a href="#how-it-works" className="text-gray-400 hover:text-white transition-colors text-sm">Jak to funguje</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Ceny</a></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-bold text-white mb-4">Podpora</h4>
-              <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Nápověda</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Dokumentace</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Kontakt</a></li>
-              </ul>
-            </div>
-
-            <div>
-              <h4 className="font-bold text-white mb-4">Právní</h4>
-              <ul className="space-y-2">
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Podmínky použití</a></li>
-                <li><a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">Ochrana soukromí</a></li>
+              <h4 className="font-bold text-white mb-6 uppercase text-xs tracking-widest">Produkt</h4>
+              <ul className="space-y-4">
+                {/* Footer odkazy také na HashLink */}
+                <li><HashLink smooth to="/#features" className="text-gray-400 hover:text-white transition-colors text-sm">Funkce</HashLink></li>
+                <li><HashLink smooth to="/#how-it-works" className="text-gray-400 hover:text-white transition-colors text-sm">Jak to funguje</HashLink></li>
               </ul>
             </div>
           </div>
 
-          <div className="pt-8 border-t border-gray-800 text-center text-gray-400 text-sm">
-            © 2026 StudentHub. Vytvořeno pro studenty, studenty.
+          <div className="pt-8 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4 text-gray-500 text-sm">
+            <p>© 2026 StudentHub. Všechna práva vyhrazena.</p>
           </div>
         </div>
       </footer>
