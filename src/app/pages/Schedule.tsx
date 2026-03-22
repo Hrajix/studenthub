@@ -20,15 +20,27 @@ const uniTimes = [
   "12:00-12:50","13:00-13:50","14:00-14:50","15:00-15:50","16:00-16:50","17:00-17:50"
 ];
 
-// Nyní ukládáme odstín (hue) a zkratku
+// Nyní ukládáme kompletní HSL barvu (odstín, sytost, světlost)
+interface ColorData {
+  h: number;
+  s: number;
+  l: number;
+}
+
 interface SubjectData {
-  hue: number;
+  color: ColorData;
   abbr: string;
 }
 
 const initialSubjects: { [key: string]: SubjectData } = {
-  "Matematika": { hue: 217, abbr: "MT" },
+  "Matematika": { color: { h: 220, s: 85, l: 50 }, abbr: "MT" },
 };
+
+const PREDEFINED_HUES = [
+  0, 25, 45, 80, 125, 160, 195, 215, 240, 275, 300, 330
+];
+
+const DEFAULT_COLOR: ColorData = { h: 215, s: 75, l: 55 }; // Pěkná modrá jako výchozí
 
 type ClassType = "Žádný" | "Přednáška" | "Cvičení" | "Seminář";
 
@@ -37,22 +49,23 @@ interface ClassBlock {
   subject: string;
   teacher: string;
   room: string;
-  hue: number;
+  color: ColorData;
   day: number;
   timeSlot: number;
   type: ClassType;
-  duration: number; // Nová vlastnost: délka hodiny (počet bloků)
+  duration: number;
 }
 
 interface DraggableClassProps {
   classData: ClassBlock;
   abbr: string;
+  isDense?: boolean;
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
 }
 
-function DraggableClass({ classData, abbr, onClick, onEdit, onDelete }: DraggableClassProps) {
+function DraggableClass({ classData, abbr, isDense, onClick, onEdit, onDelete }: DraggableClassProps) {
   const [{ isDragging }, drag] = useDrag({
     type: ItemType,
     item: classData,
@@ -61,38 +74,50 @@ function DraggableClass({ classData, abbr, onClick, onEdit, onDelete }: Draggabl
 
   const isSolid = classData.type === "Přednáška" || classData.type === "Žádný";
   
-  // Dynamické barvy přes HSL! Přednáška = sytá, Cvičení = světlá s rámečkem
-  const bg = isSolid ? `hsl(${classData.hue}, 70%, 55%)` : `hsl(${classData.hue}, 70%, 95%)`;
-  const textCol = isSolid ? "#ffffff" : `hsl(${classData.hue}, 70%, 20%)`;
-  const border = isSolid ? "none" : `2px solid hsl(${classData.hue}, 70%, 55%)`;
+  const isCompact = isDense && classData.duration === 1;
+  const isLongText = classData.subject.length > 28;
+  const shouldShrink = isCompact && isLongText;
+  
+  const { h, s, l } = classData.color;
+  // Chytrý kontrast: pokud je barva moc světlá (žlutá, světle zelená), text bude tmavý
+  const isLight = l > 60 || (h > 35 && h < 100 && l > 40);
+  
+  const bg = isSolid ? `hsl(${h}, ${s}%, ${l}%)` : `hsl(${h}, ${s}%, 95%)`;
+  const textCol = isSolid ? (isLight ? "#111827" : "#ffffff") : `hsl(${h}, ${s}%, 20%)`;
+  const border = isSolid ? "none" : `2px solid hsl(${h}, ${s}%, ${l}%)`;
 
   return (
     <div
       ref={drag}
       onClick={onClick}
       style={{ backgroundColor: bg, color: textCol, border }}
-      className={`group relative rounded-lg p-3 cursor-move shadow-sm hover:shadow-md transition-all h-full flex flex-col justify-between ${
+      className={`group relative rounded-lg ${shouldShrink ? 'p-1.5' : 'p-2'} cursor-move shadow-sm hover:shadow-md transition-all h-full flex flex-col justify-between ${
         isDragging ? "opacity-50" : "opacity-100"
       }`}
     >
-      {/* Tlačítka zobrazená při hoveru - Plovoucí bublina ven z rohu */}
+      {/* Plovoucí bublina s akcemi */}
       <div className="absolute -top-2 -right-2 hidden group-hover:flex gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md rounded-lg p-0.5 z-20">
-        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition-colors"><Edit size={14} /></button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"><Trash2 size={14} /></button>
+        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition-colors"><Edit size={12} /></button>
+        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"><Trash2 size={12} /></button>
       </div>
 
-      <div>
-        <div className="font-bold text-sm mb-1 leading-tight">{classData.subject}</div>
-        <div className="text-xs opacity-90 truncate">{classData.teacher}</div>
+      <div className="min-h-0">
+        <div 
+          className={`font-bold ${shouldShrink ? 'text-[10px] line-clamp-3' : 'text-[12px] line-clamp-2'} leading-tight mb-0.5`} 
+          title={classData.subject}
+        >
+          {classData.subject}
+        </div>
+        <div className="text-[11px] truncate opacity-90">{classData.teacher}</div>
       </div>
       
-      <div className="text-xs opacity-75 mt-2 flex justify-between items-end gap-2">
+      <div className="text-[10px] mt-1 flex justify-between items-end gap-1 opacity-80">
         <span className="truncate">{classData.room}</span>
         
-        <div className="flex items-center gap-1.5 shrink-0">
-          <span className="font-mono font-bold opacity-60">{abbr}</span>
+        <div className="flex items-center gap-1 shrink-0">
+          <span className="font-mono font-bold">{abbr}</span>
           {classData.type !== 'Žádný' && (
-            <span className={`text-[9px] px-1 py-0.5 rounded font-bold ${isSolid ? 'bg-black/20 text-white' : 'bg-black/10 text-black dark:text-white dark:bg-white/20'}`}>
+            <span className={`px-1 py-0.5 text-[8px] rounded font-bold leading-none ${isSolid ? 'bg-black/20 text-white' : 'bg-black/10 text-black dark:text-white dark:bg-white/20'}`}>
               {classData.type === 'Přednáška' ? 'PŘ' : classData.type === 'Cvičení' ? 'CV' : 'SM'}
             </span>
           )}
@@ -105,7 +130,7 @@ function DraggableClass({ classData, abbr, onClick, onEdit, onDelete }: Draggabl
 function DraggableSubject({ subject, data, onEdit, onDelete }: { subject: string; data: SubjectData; onEdit: () => void; onDelete: () => void }) {
   const [{ isDragging }, drag] = useDrag({
     type: "SUBJECT",
-    item: { subject, hue: data.hue },
+    item: { subject, color: data.color },
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   });
 
@@ -116,13 +141,12 @@ function DraggableSubject({ subject, data, onEdit, onDelete }: { subject: string
         isDragging ? "opacity-50" : "opacity-100"
       }`}
     >
-      <div className="w-4 h-4 rounded shadow-sm shrink-0" style={{ backgroundColor: `hsl(${data.hue}, 70%, 55%)` }}></div>
+      <div className="w-4 h-4 rounded shadow-sm shrink-0" style={{ backgroundColor: `hsl(${data.color.h}, ${data.color.s}%, ${data.color.l}%)` }}></div>
       <div className="flex flex-col min-w-0">
         <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{subject}</span>
         <span className="text-[10px] text-gray-500 font-mono">{data.abbr}</span>
       </div>
       
-      {/* Plovoucí bublina s akcemi - vyskočí ven z pravého horního rohu */}
       <div className="absolute -top-3 -right-2 hidden group-hover:flex items-center gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-md px-1 py-0.5 rounded-lg z-20">
         <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded"><Edit size={14} /></button>
         <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded"><Trash2 size={14} /></button>
@@ -182,21 +206,22 @@ interface TimeSlotProps {
   timeSlot: number;
   classData?: ClassBlock;
   abbr: string;
-  colSpan?: number; // Nový parametr pro roztažení buňky v CSS Gridu
+  colSpan?: number;
+  isDense?: boolean;
   onDropClass: (item: ClassBlock, day: number, timeSlot: number) => void;
-  onDropSubject: (subject: string, hue: number, day: number, timeSlot: number) => void;
+  onDropSubject: (subject: string, color: ColorData, day: number, timeSlot: number) => void;
   onEmptyClick: (day: number, timeSlot: number) => void;
   onClassClick: () => void;
   onEditClass: () => void;
   onDeleteClass: () => void;
 }
 
-function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, onDropClass, onDropSubject, onEmptyClick, onClassClick, onEditClass, onDeleteClass }: TimeSlotProps) {
+function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, onDropClass, onDropSubject, onEmptyClick, onClassClick, onEditClass, onDeleteClass }: TimeSlotProps) {
   const [{ isOver }, drop] = useDrop({
     accept: ["CLASS", "SUBJECT"],
     drop: (item: any, monitor) => {
       if (monitor.getItemType() === "CLASS") onDropClass(item, day, timeSlot);
-      if (monitor.getItemType() === "SUBJECT") onDropSubject(item.subject, item.hue, day, timeSlot);
+      if (monitor.getItemType() === "SUBJECT") onDropSubject(item.subject, item.color, day, timeSlot);
     },
     collect: (monitor) => ({ isOver: monitor.isOver() }),
   });
@@ -206,15 +231,15 @@ function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, onDropClass, on
       ref={drop}
       onClick={() => { if (!classData) onEmptyClick(day, timeSlot); }}
       style={{ gridColumn: colSpan > 1 ? `span ${colSpan}` : undefined }}
-      className={`min-h-[90px] border border-gray-200 dark:border-gray-700 rounded-lg transition-colors relative group ${
+      className={`min-h-[72px] border border-gray-200 dark:border-gray-700 rounded-lg transition-colors relative group ${
         isOver ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-600" : "bg-white dark:bg-gray-800 cursor-pointer"
       }`}
     >
       {classData ? (
-        <DraggableClass classData={classData} abbr={abbr} onClick={onClassClick} onEdit={onEditClass} onDelete={onDeleteClass} />
+        <DraggableClass classData={classData} abbr={abbr} isDense={isDense} onClick={onClassClick} onEdit={onEditClass} onDelete={onDeleteClass} />
       ) : (
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <Plus className="w-6 h-6 text-gray-300 dark:text-gray-600" />
+          <Plus className="w-5 h-5 text-gray-300 dark:text-gray-600" />
         </div>
       )}
     </div>
@@ -246,12 +271,11 @@ function ScheduleContent() {
   
   const [newSubjectName, setNewSubjectName] = useState("");
   const [newSubjectAbbr, setNewSubjectAbbr] = useState("");
-  const [newSubjectHue, setNewSubjectHue] = useState(217);
+  const [newSubjectColor, setNewSubjectColor] = useState<ColorData>(DEFAULT_COLOR);
 
   // --- STAVY ROZVRHU ---
   const [schedule, setSchedule] = useState<ClassBlock[]>([]);
   
-  // Dynamická šířka: počítáme to přesně podle celkové délky (času), nejen počtu bloků
   const totalDuration = schedule.reduce((acc, c) => acc + c.duration, 0);
   const longClassesDuration = schedule.filter(c => c.duration > 1).reduce((acc, c) => acc + c.duration, 0);
   const isDense = totalDuration > 0 && longClassesDuration >= totalDuration / 2;
@@ -261,7 +285,6 @@ function ScheduleContent() {
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [draftSlot, setDraftSlot] = useState({ day: 0, timeSlot: 0 });
   
-  // Přidáno `duration` do výchozího stavu
   const [classForm, setClassForm] = useState<{subject: string; teacher: string; room: string; type: ClassType; duration: number}>({ 
     subject: "", teacher: "", room: "", type: "Žádný", duration: 1 
   });
@@ -271,21 +294,20 @@ function ScheduleContent() {
     if (!newSubjectName.trim()) return;
     
     if (editingSubjectName) {
-      // Pokud se změnil název, aktualizujeme i hodiny v rozvrhu
       if (editingSubjectName !== newSubjectName) {
-        setSchedule(prev => prev.map(c => c.subject === editingSubjectName ? { ...c, subject: newSubjectName, hue: newSubjectHue } : { ...c, hue: newSubjectHue }));
+        setSchedule(prev => prev.map(c => c.subject === editingSubjectName ? { ...c, subject: newSubjectName, color: newSubjectColor } : { ...c, color: newSubjectColor }));
       } else {
-        setSchedule(prev => prev.map(c => c.subject === editingSubjectName ? { ...c, hue: newSubjectHue } : c));
+        setSchedule(prev => prev.map(c => c.subject === editingSubjectName ? { ...c, color: newSubjectColor } : c));
       }
 
       setSubjects(prev => {
         const next = { ...prev };
         delete next[editingSubjectName];
-        next[newSubjectName] = { hue: newSubjectHue, abbr: newSubjectAbbr };
+        next[newSubjectName] = { color: newSubjectColor, abbr: newSubjectAbbr };
         return next;
       });
     } else {
-      setSubjects(prev => ({ ...prev, [newSubjectName]: { hue: newSubjectHue, abbr: newSubjectAbbr } }));
+      setSubjects(prev => ({ ...prev, [newSubjectName]: { color: newSubjectColor, abbr: newSubjectAbbr } }));
     }
     setShowAddSubjectModal(false);
   };
@@ -295,7 +317,7 @@ function ScheduleContent() {
     setEditingSubjectName(subjName);
     setNewSubjectName(subjName);
     setNewSubjectAbbr(data.abbr);
-    setNewSubjectHue(data.hue);
+    setNewSubjectColor(data.color);
     setShowAddSubjectModal(true);
   };
 
@@ -310,7 +332,8 @@ function ScheduleContent() {
     setEditingSubjectName(null);
     setNewSubjectName("");
     setNewSubjectAbbr("");
-    setNewSubjectHue(Math.floor(Math.random() * 360));
+    const randomHue = PREDEFINED_HUES[Math.floor(Math.random() * PREDEFINED_HUES.length)];
+    setNewSubjectColor({ h: randomHue, s: 75, l: 55 }); // Výchozí sytá barva
     setShowAddSubjectModal(true);
   };
 
@@ -319,7 +342,7 @@ function ScheduleContent() {
     setSchedule(prev => prev.map(cls => cls.id === item.id ? { ...cls, day, timeSlot } : cls));
   };
 
-  const handleDropSubject = (subject: string, hue: number, day: number, timeSlot: number) => {
+  const handleDropSubject = (subject: string, color: ColorData, day: number, timeSlot: number) => {
     openClassModal(day, timeSlot, subject);
   };
 
@@ -341,15 +364,15 @@ function ScheduleContent() {
 
   const handleSaveClass = () => {
     if (!classForm.subject) return;
-    const hue = subjects[classForm.subject]?.hue || 0;
+    const color = subjects[classForm.subject]?.color || DEFAULT_COLOR;
     
     if (editingClassId) {
-      setSchedule(prev => prev.map(c => c.id === editingClassId ? { ...c, ...classForm, hue } : c));
+      setSchedule(prev => prev.map(c => c.id === editingClassId ? { ...c, ...classForm, color } : c));
     } else {
       setSchedule(prev => [...prev, {
         id: Math.random().toString(),
         ...classForm,
-        hue,
+        color,
         day: draftSlot.day,
         timeSlot: draftSlot.timeSlot,
       }]);
@@ -377,11 +400,11 @@ function ScheduleContent() {
         </button>
       </div>
 
-      {/* Schedule Grid - Větší min-w pro horizontální scroll */}
+      {/* Schedule Grid */}
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-x-auto">
         <div className="w-max min-w-full">
           {/* Header Row */}
-          <div className="gap-3 p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700" style={{ display: 'grid', gridTemplateColumns: `40px repeat(${timeSlots.length}, ${currentCellWidth}px)` }}>
+          <div className="gap-2 p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700" style={{ display: 'grid', gridTemplateColumns: `40px repeat(${timeSlots.length}, ${currentCellWidth}px)` }}>
             <div className="font-semibold text-gray-900 dark:text-white flex items-center">
               Den
             </div>
@@ -395,7 +418,7 @@ function ScheduleContent() {
           {/* Grid Rows */}
           <div className="p-4">
             {days.map((dayName, dayIndex) => (
-              <div key={dayName} className="gap-3 mb-3" style={{ display: 'grid', gridTemplateColumns: `40px repeat(${timeSlots.length}, ${currentCellWidth}px)` }}>
+              <div key={dayName} className="gap-2 mb-3" style={{ display: 'grid', gridTemplateColumns: `40px repeat(${timeSlots.length}, ${currentCellWidth}px)` }}>
                 <div className="flex items-center">
                   <div className="font-medium text-gray-900 dark:text-white">{dayName}</div>
                 </div>
@@ -417,6 +440,7 @@ function ScheduleContent() {
                         day={dayIndex}
                         timeSlot={timeIndex}
                         colSpan={colSpan}
+                        isDense={isDense}
                         classData={cls}
                         abbr={cls ? (subjects[cls.subject]?.abbr || "") : ""}
                         onDropClass={handleDropClass}
@@ -523,17 +547,39 @@ function ScheduleContent() {
                 <input type="text" value={newSubjectAbbr} onChange={(e) => setNewSubjectAbbr(e.target.value.toUpperCase())} maxLength={6} placeholder="Např. DNSD" className="w-full p-3 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
               </div>
               
-              {/* Nativní HSL Hue Slider */}
+              {/* Výběr barvy - Odstíny a jejich tmavé varianty */}
               <div>
-                <label className="block text-sm text-gray-600 mb-2">Vyber barvu (odstín)</label>
-                <input
-                  type="range"
-                  min="0" max="360"
-                  value={newSubjectHue}
-                  onChange={(e) => setNewSubjectHue(parseInt(e.target.value))}
-                  className="w-full h-3 rounded-lg appearance-none cursor-pointer"
-                  style={{ background: `linear-gradient(to right, #f00 0%, #ff0 17%, #0f0 33%, #0ff 50%, #00f 67%, #f0f 83%, #f00 100%)` }}
-                />
+                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-3">Vyber barvu (odstín a tmavost)</label>
+                <div className="grid grid-cols-6 gap-x-3 gap-y-4">
+                  {PREDEFINED_HUES.map((hue) => {
+                    // Definujeme dvě varianty pro každý odstín
+                    const variants = [
+                      { h: hue, s: 75, l: 55 }, // Normální/Sytá
+                      { h: hue, s: 75, l: 30 }, // Tmavá
+                    ];
+
+                    return (
+                      <div key={hue} className="flex flex-col gap-4">
+                        {variants.map((v, idx) => {
+                          const isSelected = newSubjectColor.h === v.h && newSubjectColor.l === v.l;
+                          return (
+                            <button
+                              key={idx}
+                              type="button"
+                              onClick={(e) => { e.preventDefault(); setNewSubjectColor(v); }}
+                              className={`w-10 aspect-square rounded-lg shadow-sm transition-all outline-none ${
+                                isSelected 
+                                  ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-gray-800 scale-110 z-10' 
+                                  : 'hover:scale-105 hover:ring-2 hover:ring-gray-300 dark:hover:ring-gray-600'
+                              }`}
+                              style={{ backgroundColor: `hsl(${v.h}, ${v.s}%, ${v.l}%)` }}
+                            />
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
             <div className="flex gap-3">
