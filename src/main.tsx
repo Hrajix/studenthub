@@ -4,6 +4,14 @@ import { RouterProvider } from "react-router"
 import { router } from "./app/routes"
 import './styles/index.css'
 
+// Fix pro Supabase Auth + HashRouter
+if (window.location.hash.includes('access_token=')) {
+  if (!window.location.hash.includes('#/panel')) {
+    const newHash = window.location.hash.replace('#', '#/panel');
+    window.location.hash = newHash;
+  }
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <RouterProvider router={router} />
