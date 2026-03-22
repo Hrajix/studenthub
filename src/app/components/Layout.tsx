@@ -14,48 +14,63 @@ export default function Layout() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setMounted(true);
-
-    // 1. Zjistíme, jestli je uživatel přihlášený hned při načtení
-    const checkUser = async () => {
+    const initAuth = async () => {
+      // 1. Zkusíme, jestli už Supabase session našel sám
       const { data: { session } } = await supabase.auth.getSession();
       
-      if (!session) {
-        navigate("/login");
-      } else {
+      if (session) {
         setUser(session.user);
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      // 2. RUČNÍ EXTRAKCE (pokud Supabase selhal kvůli HashRouteru)
+      const hash = window.location.hash;
+      if (hash.includes("access_token=")) {
+        // Rozbijeme URL a najdeme část s tokenem
+        const tokenMatch = hash.match(/access_token=([^&]*)/);
+        const refreshMatch = hash.match(/refresh_token=([^&]*)/);
+
+        if (tokenMatch) {
+          const { data } = await supabase.auth.setSession({
+            access_token: tokenMatch[1],
+            refresh_token: refreshMatch ? refreshMatch[1] : "",
+          });
+          if (data.session) {
+            setUser(data.session.user);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+      
+      // Pokud nic nepomohlo do 2 sekund, jdi na login
+      setTimeout(() => {
+        setLoading(false);
+        // Tady můžeš nechat navigate("/login"), pokud session fakt není
+      }, 2000);
     };
 
-    checkUser();
-
-    // 2. Posloucháme změny (přihlášení/odhlášení) v reálném čase
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!session) {
-        navigate("/login");
-      } else {
-        setUser(session.user);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    initAuth();
   }, [navigate]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    navigate("/");
+    // Navigaci řeší onAuthStateChange výše
   };
 
   const toggleTheme = () => {
     setTheme(theme === "dark" ? "light" : "dark");
   };
 
-  // 3. Loading obrazovka, aby to neproblikávalo
+  // 3. Loading obrazovka (točící se kolečko)
   if (loading) {
     return (
       <div className="h-screen w-full flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+        <div className="flex flex-col items-center gap-4">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          <p className="text-gray-500 dark:text-gray-400 animate-pulse">Ověřování uživatele...</p>
+        </div>
       </div>
     );
   }
@@ -104,26 +119,27 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* User Profile - Tady bereme data ze Supabase objektu */}
+        {/* User Profile */}
         <div className="p-4 border-t border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3 mb-3">
             <img
-              src={user?.user_metadata?.avatar_url} 
+              src={user?.user_metadata?.avatar_url || `https://ui-avatars.com/api/?name=${user?.email}`} 
               alt="Avatar"
-              className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 object-cover"
+              referrerPolicy="no-referrer"
+              className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700 object-cover border border-gray-100 dark:border-gray-600"
             />
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-gray-900 dark:text-white truncate">
+              <p className="font-medium text-gray-900 dark:text-white truncate text-sm">
                 {user?.user_metadata?.full_name || "Student"}
               </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 truncate">
                 {user?.email}
               </p>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors font-medium"
           >
             <LogOut className="w-4 h-4" />
             Odhlásit se
@@ -134,7 +150,7 @@ export default function Layout() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-end px-6 gap-3">
           <button onClick={toggleTheme} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-            {mounted && theme === "dark" ? <Sun className="w-5 h-5 text-gray-300" /> : <Moon className="w-5 h-5 text-gray-600" />}
+            {mounted && (theme === "dark" ? <Sun className="w-5 h-5 text-gray-300" /> : <Moon className="w-5 h-5 text-gray-600" />)}
           </button>
           <button className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
             <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
@@ -142,7 +158,7 @@ export default function Layout() {
           </button>
         </header>
 
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto bg-gray-50 dark:bg-gray-900/50">
           <Outlet />
         </main>
       </div>

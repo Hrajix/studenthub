@@ -19,7 +19,7 @@ export const router = createHashRouter([
     Component: LoginPage,
   },
   {
-    path: "/panel",
+    path: "/panel/*",
     Component: Layout,
     children: [
       { index: true, Component: Dashboard },
