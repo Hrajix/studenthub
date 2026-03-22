@@ -5,19 +5,15 @@ import { supabase } from "../../lib/supabase";
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  const handleGoogleLogin = async () => {
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        // Supabase tě po přihlášení hodí sem
-        redirectTo: window.location.origin + '/#/panel', 
-      },
-    });
-
-    if (error) {
-      console.error("Chyba při přihlášení:", error.message);
-    }
-  };
+    const handleGoogleLogin = async () => {
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          // Důležité: Přidat /#/panel přímo sem
+          redirectTo: window.location.origin,
+        },
+      });
+    };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
