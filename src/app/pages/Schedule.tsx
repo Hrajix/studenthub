@@ -291,33 +291,37 @@ function ScheduleContent() {
   });
 
   // --- POMOCNÁ FUNKCE PRO UKLÁDÁNÍ ---
-  const syncWithSupabase = async (
-    currentSchedule?: ClassBlock[], 
-    currentSubjects?: { [key: string]: SubjectData }, 
-    currentTimeSlots?: string[]
-  ) => {
+  const syncWithSupabase = async (currentSchedule, currentSubjects, currentTimeSlots) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        console.error("DEBUG: Uživatel není přihlášen!");
+        return;
+      }
 
-      // Pokud parametr nepřijde, použijeme aktuální stav ze useState
       const scheduleInfo = {
         timeSlots: currentTimeSlots || timeSlots,
         subjects: currentSubjects || subjects,
         blocks: currentSchedule || schedule
       };
 
-      const { error } = await supabase
+      console.log("DEBUG: Pokouším se uložit data pro uživatele:", user.id);
+
+      const { data, error } = await supabase
         .from('schedule')
         .upsert({ 
           user: user.id, 
           schedule_info: scheduleInfo 
-        }, { onConflict: 'user' });
+        }, { onConflict: 'user' })
+        .select(); // Přidáme select, abychom viděli, co se vrátilo
 
-      if (error) throw error;
-      console.log("Synchronizováno se Supabase");
+      if (error) {
+        console.error("DEBUG: Chyba ze Supabase:", error.message, error.details, error.hint);
+      } else {
+        console.log("DEBUG: Úspěšně uloženo, vrácená data:", data);
+      }
     } catch (err) {
-      console.error("Chyba při ukládání:", err);
+      console.error("DEBUG: Kritická chyba v JS:", err);
     }
   };
 
