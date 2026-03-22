@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
+import { HTML5Backend, getEmptyImage } from "react-dnd-html5-backend"; // Nové: getEmptyImage
 import { useNavigate } from "react-router";
+import { motion } from "framer-motion"; // Nové: framer-motion
 import { Plus, Edit, Trash2, GripVertical, Settings2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
@@ -13,7 +14,7 @@ const DENSE_CELL_WIDTH = 100;   // Šířka buňky, když převažují dvouhodin
 
 const days = ["Po", "Út", "St", "Čt", "Pá"];
 const normalTimes = [
-  "8:00-8:45","8:55-9:40","10:00-10:45","10:55-11:40",
+  "7:20-7:55","8:00-8:45","8:55-9:40","10:00-10:45","10:55-11:40",
   "11:50-12:35","12:45-13:30","13:40-14:25","14:35-15:20","15:30-16:15"
 ];
 const uniTimes = [
@@ -43,7 +44,7 @@ const PREDEFINED_HUES = [
 
 const DEFAULT_COLOR: ColorData = { h: 215, s: 75, l: 55 }; // Pěkná modrá jako výchozí
 
-type ClassType = "Žádný" | "Přednáška" | "Cvičení" | "Seminář";
+type ClassType = "Běžný" | "Přednáška" | "Cvičení" | "Seminář";
 
 interface ClassBlock {
   id: string;
@@ -64,23 +65,31 @@ interface DraggableClassProps {
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onDragEnd: () => void; // Vráceno zpět pro ukládání po puštění
 }
 
-function DraggableClass({ classData, abbr, isDense, onClick, onEdit, onDelete }: DraggableClassProps) {
-  const [{ isDragging }, drag] = useDrag({
+function DraggableClass({ classData, abbr, isDense, onClick, onEdit, onDelete, onDragEnd }: DraggableClassProps) {
+  const [{ isDragging }, drag, dragPreview] = useDrag({
     type: ItemType,
-    item: classData,
+    item: { ...classData },
+    end: () => onDragEnd(),
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   });
 
-  const isSolid = classData.type === "Přednáška" || classData.type === "Žádný";
-  
+  useEffect(() => {
+    dragPreview(getEmptyImage(), { captureDraggingState: true });
+  }, [dragPreview]);
+
+  const animationConfig = { type: "spring", stiffness: 350, damping: 25 };
+
+  const isSolid = classData.type === "Přednáška" || classData.type === "Běžný";
   const isCompact = isDense && classData.duration === 1;
-  const isLongText = classData.subject.length > 28;
+  
+  // OPRAVA 1: Snížen limit na 15 znaků, aby Python s 25 znaky ZARUČENĚ prošel a smrsknul se!
+  const isLongText = classData.subject.length > 13;
   const shouldShrink = isCompact && isLongText;
   
   const { h, s, l } = classData.color;
-  // Chytrý kontrast: pokud je barva moc světlá (žlutá, světle zelená), text bude tmavý
   const isLight = l > 60 || (h > 35 && h < 100 && l > 40);
   
   const bg = isSolid ? `hsl(${h}, ${s}%, ${l}%)` : `hsl(${h}, ${s}%, 95%)`;
@@ -88,42 +97,44 @@ function DraggableClass({ classData, abbr, isDense, onClick, onEdit, onDelete }:
   const border = isSolid ? "none" : `2px solid hsl(${h}, ${s}%, ${l}%)`;
 
   return (
-    <div
-      ref={drag}
-      onClick={onClick}
-      style={{ backgroundColor: bg, color: textCol, border }}
-      className={`group relative rounded-lg ${shouldShrink ? 'p-1.5' : 'p-2'} cursor-move shadow-sm hover:shadow-md transition-all h-full flex flex-col justify-between ${
-        isDragging ? "opacity-50" : "opacity-100"
-      }`}
-    >
-      {/* Plovoucí bublina s akcemi */}
-      <div className="absolute -top-2 -right-2 hidden group-hover:flex gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md rounded-lg p-0.5 z-20">
-        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition-colors"><Edit size={12} /></button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"><Trash2 size={12} /></button>
-      </div>
+    // OPRAVA 2: pointer-events-none během tažení! Díky tomu hodina neblokuje myš a můžeš ji přesunout i o pouhé 1 políčko.
+    <div ref={drag} className={`w-full h-full select-none cursor-grab group ${isDragging ? "pointer-events-auto" : "pointer-events-auto"}`}>
+      <motion.div
+        onClick={onClick}
+        style={{ backgroundColor: bg, color: textCol, border }}
+        layoutId={classData.id}
+        transition={animationConfig}
+        className={`relative rounded-lg ${shouldShrink ? 'p-1.5' : 'p-2'} h-full flex flex-col justify-between ${
+          isDragging 
+            ? "is-dragging scale-[1.03] rotate-1 shadow-2xl ring-4 ring-indigo-400/50 opacity-90 z-50" 
+            : "shadow-sm hover:shadow-md transition-shadow"
+        }`}
+      >
+        {/* Plovoucí bublina s akcemi */}
+        <div className="absolute -top-2 -right-2 hidden group-hover:flex gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md rounded-lg p-0.5 z-20">
+          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition-colors"><Edit size={12} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"><Trash2 size={12} /></button>
+        </div>
 
-      <div className="min-h-0">
-        <div 
-          className={`font-bold ${shouldShrink ? 'text-[10px] line-clamp-3' : 'text-[12px] line-clamp-2'} leading-tight mb-0.5`} 
-          title={classData.subject}
-        >
-          {classData.subject}
+        <div className="min-h-0">
+          <div className={`font-bold ${shouldShrink ? 'text-[10px] line-clamp-3' : 'text-[12px] line-clamp-2'} leading-tight mb-0.5`} title={classData.subject}>
+            {classData.subject}
+          </div>
+          <div className={`${shouldShrink ? 'text-[9px]' : 'text-[11px]'} truncate opacity-90`}>{classData.teacher}</div>
         </div>
-        <div className="text-[11px] truncate opacity-90">{classData.teacher}</div>
-      </div>
-      
-      <div className="text-[10px] mt-1 flex justify-between items-end gap-1 opacity-80">
-        <span className="truncate">{classData.room}</span>
         
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="font-mono font-bold">{abbr}</span>
-          {classData.type !== 'Žádný' && (
-            <span className={`px-1 py-0.5 text-[8px] rounded font-bold leading-none ${isSolid ? 'bg-black/20 text-white' : 'bg-black/10 text-black dark:text-white dark:bg-white/20'}`}>
-              {classData.type === 'Přednáška' ? 'PŘ' : classData.type === 'Cvičení' ? 'CV' : 'SM'}
-            </span>
-          )}
+        <div className={`${shouldShrink ? 'text-[8px]' : 'text-[10px]'} mt-1 flex justify-between items-end gap-1 opacity-80`}>
+          <span className="truncate">{classData.room}</span>
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="font-mono font-bold">{abbr}</span>
+            {classData.type !== 'Běžný' && (
+              <span className={`px-1 py-0.5 ${shouldShrink ? 'text-[7px]' : 'text-[8px]'} rounded font-bold leading-none ${isSolid ? 'bg-black/20 text-white' : 'bg-black/10 text-black dark:text-white dark:bg-white/20'}`}>
+                {classData.type === 'Přednáška' ? 'PŘ' : classData.type === 'Cvičení' ? 'CV' : 'SM'}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -138,7 +149,7 @@ function DraggableSubject({ subject, data, onEdit, onDelete }: { subject: string
   return (
     <div
       ref={drag}
-      className={`group relative flex items-center gap-2 cursor-grab active:cursor-grabbing p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-100 dark:border-gray-700 ${
+      className={`select-none group relative flex items-center gap-2 cursor-grab active:cursor-grabbing p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-100 dark:border-gray-700 ${
         isDragging ? "opacity-50" : "opacity-100"
       }`}
     >
@@ -156,52 +167,6 @@ function DraggableSubject({ subject, data, onEdit, onDelete }: { subject: string
   );
 }
 
-interface DraggableTimeSlotProps {
-  slot: string;
-  index: number;
-  moveSlot: (dragIndex: number, hoverIndex: number) => void;
-  updateSlot: (index: number, value: string) => void;
-  deleteSlot: (index: number) => void;
-}
-
-function DraggableTimeSlotItem({ slot, index, moveSlot, updateSlot, deleteSlot }: DraggableTimeSlotProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [, drop] = useDrop({
-    accept: "TIME_SLOT_ITEM",
-    hover(item: { index: number }) {
-      if (!ref.current) return;
-      const dragIndex = item.index;
-      const hoverIndex = index;
-      if (dragIndex === hoverIndex) return;
-      moveSlot(dragIndex, hoverIndex);
-      item.index = hoverIndex;
-    },
-  });
-  const [{ isDragging }, drag, preview] = useDrag({
-    type: "TIME_SLOT_ITEM",
-    item: { index },
-    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
-  });
-  
-  drag(drop(ref));
-  
-  return (
-    <div ref={ref} className={`flex gap-2 items-center bg-white dark:bg-gray-800 p-1 rounded-lg border border-transparent hover:border-gray-200 dark:hover:border-gray-700 ${isDragging ? 'opacity-50' : 'opacity-100'}`}>
-      <div ref={preview} className="cursor-grab p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-        <GripVertical size={16} />
-      </div>
-      <input 
-        value={slot} 
-        onChange={(e) => updateSlot(index, e.target.value)} 
-        className="flex-1 p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
-      />
-      <button onClick={() => deleteSlot(index)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors">
-        <Trash2 size={16}/>
-      </button>
-    </div>
-  );
-}
-
 interface TimeSlotProps {
   day: number;
   timeSlot: number;
@@ -209,7 +174,9 @@ interface TimeSlotProps {
   abbr: string;
   colSpan?: number;
   isDense?: boolean;
-  onDropClass: (item: ClassBlock, day: number, timeSlot: number) => void;
+  checkCollision: (classId: string | null, day: number, timeSlot: number, duration: number) => boolean;
+  onHoverClass: (id: string, day: number, timeSlot: number) => void;
+  onDragEndClass: () => void;
   onDropSubject: (subject: string, color: ColorData, day: number, timeSlot: number) => void;
   onEmptyClick: (day: number, timeSlot: number) => void;
   onClassClick: () => void;
@@ -217,32 +184,62 @@ interface TimeSlotProps {
   onDeleteClass: () => void;
 }
 
-function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, onDropClass, onDropSubject, onEmptyClick, onClassClick, onEditClass, onDeleteClass }: TimeSlotProps) {
-  const [{ isOver }, drop] = useDrop({
+function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, checkCollision, onHoverClass, onDragEndClass, onDropSubject, onEmptyClick, onClassClick, onEditClass, onDeleteClass }: TimeSlotProps) {
+  const [{ isOver, canDrop, itemType }, drop] = useDrop({
     accept: ["CLASS", "SUBJECT"],
+    dropEffect: "move",
+    canDrop: (item: any, monitor) => {
+      if (monitor.getItemType() === "SUBJECT") return checkCollision(null, day, timeSlot, 1);
+      if (monitor.getItemType() === "CLASS") return checkCollision(item.id, day, timeSlot, item.duration);
+      return false;
+    },
+    hover: (item: any, monitor) => {
+      if (monitor.getItemType() === "CLASS") {
+        if (item.day === day && item.timeSlot === timeSlot) return; 
+        if (checkCollision(item.id, day, timeSlot, item.duration)) {
+           onHoverClass(item.id, day, timeSlot);
+           item.day = day;
+           item.timeSlot = timeSlot;
+        }
+      }
+    },
     drop: (item: any, monitor) => {
-      if (monitor.getItemType() === "CLASS") onDropClass(item, day, timeSlot);
       if (monitor.getItemType() === "SUBJECT") onDropSubject(item.subject, item.color, day, timeSlot);
     },
-    collect: (monitor) => ({ isOver: monitor.isOver() }),
+    collect: (monitor) => ({ 
+      isOver: monitor.isOver(),
+      canDrop: monitor.canDrop(),
+      itemType: monitor.getItemType()
+    }),
   });
+
+  const isSubjectHighlight = isOver && canDrop && itemType === "SUBJECT";
 
   return (
     <div
       ref={drop}
       onClick={() => { if (!classData) onEmptyClick(day, timeSlot); }}
-      style={{ gridColumn: colSpan > 1 ? `span ${colSpan}` : undefined }}
-      className={`min-h-[72px] border border-gray-200 dark:border-gray-700 rounded-lg transition-colors relative group ${
-        isOver ? "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-300 dark:border-indigo-600" : "bg-white dark:bg-gray-800 cursor-pointer"
-      }`}
+      // OPRAVA 3: Pokud tu je hodina, skryjeme okraje a bílé pozadí samotné mřížky. Barevná karta ji tak dokonale vyplní.
+      className={`min-h-[72px] min-w-0 rounded-lg transition-colors relative group cursor-pointer ${
+        isSubjectHighlight 
+          ? "bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-600" 
+          : (classData 
+              ? "border border-transparent bg-transparent" 
+              : "bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700")
+      } ${classData ? 'z-10' : 'z-0'} has-[.is-dragging]:z-50`}
     >
-      {classData ? (
-        <DraggableClass classData={classData} abbr={abbr} isDense={isDense} onClick={onClassClick} onEdit={onEditClass} onDelete={onDeleteClass} />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <Plus className="w-5 h-5 text-gray-300 dark:text-gray-600" />
+      {classData && (
+        <div 
+          className="absolute inset-y-0 left-0 z-20"
+          style={{ width: `calc(${colSpan * 100}% + ${(colSpan - 1) * 6}px)` }} 
+        >
+          <DraggableClass classData={classData} abbr={abbr} isDense={isDense} onClick={onClassClick} onEdit={onEditClass} onDelete={onDeleteClass} onDragEnd={onDragEndClass} />
         </div>
       )}
+      
+      <div className={`absolute inset-0 flex items-center justify-center transition-opacity z-0 ${classData ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
+        <Plus className="w-5 h-5 text-gray-300 dark:text-gray-600" />
+      </div>
     </div>
   );
 }
@@ -252,7 +249,7 @@ function ScheduleContent() {
   const [isOddWeek, setIsOddWeek] = useState(true);
 
   // --- STAVY PRO DYNAMICKÉ ČASOVÉ SLOTY ---
-  const [timeSlots, setTimeSlots] = useState<string[]>(uniTimes);
+  const [timeSlots, setTimeSlots] = useState<string[]>(normalTimes); // <-- Zde upraveno na normalTimes!
   const [showEditTimesModal, setShowEditTimesModal] = useState(false);
 
   // Funkce pro Drag & Drop v modálu s časy
@@ -276,6 +273,9 @@ function ScheduleContent() {
 
   // --- STAVY ROZVRHU ---
   const [schedule, setSchedule] = useState<ClassBlock[]>([]);
+  // Pomocná reference pro jistotu, že funkce vždy vidí poslední data
+  const scheduleRef = useRef(schedule);
+  useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
   
   const totalDuration = schedule.reduce((acc, c) => acc + c.duration, 0);
   const longClassesDuration = schedule.filter(c => c.duration > 1).reduce((acc, c) => acc + c.duration, 0);
@@ -287,7 +287,7 @@ function ScheduleContent() {
   const [draftSlot, setDraftSlot] = useState({ day: 0, timeSlot: 0 });
   
   const [classForm, setClassForm] = useState<{subject: string; teacher: string; room: string; type: ClassType; duration: number}>({ 
-    subject: "", teacher: "", room: "", type: "Žádný", duration: 1 
+    subject: "", teacher: "", room: "", type: "Běžný", duration: 1 
   });
 
   // --- POMOCNÁ FUNKCE PRO UKLÁDÁNÍ ---
@@ -406,11 +406,34 @@ function ScheduleContent() {
   };
 
   // --- HANDLERY PRO HODINY ---
-  const handleDropClass = (item: ClassBlock, day: number, timeSlot: number) => {
-      const updated = schedule.map(cls => cls.id === item.id ? { ...cls, day, timeSlot } : cls);
-      setSchedule(updated);
+  
+  // Zjistí, jestli má hodina místo a nepřekrývá jinou
+  const checkCollision = useCallback((classId: string | null, targetDay: number, targetTimeSlot: number, duration: number) => {
+    if (targetTimeSlot + duration > timeSlots.length) return false; // Neteče mimo tabulku?
+    for (let i = 0; i < duration; i++) {
+      const slot = targetTimeSlot + i;
+      const occupying = schedule.find(c => c.day === targetDay && c.timeSlot <= slot && c.timeSlot + c.duration > slot);
+      if (occupying && occupying.id !== classId) return false; // Není tam už někdo jiný?
+    }
+    return true;
+  }, [schedule, timeSlots.length]);
+
+  const handleHoverClass = useCallback((id: string, day: number, timeSlot: number) => {
+    setSchedule(prev => prev.map(c => c.id === id ? { ...c, day, timeSlot } : c));
+  }, []);
+
+  // Položení hodiny do nového slotu
+  const handleDropClass = useCallback((item: ClassBlock, day: number, timeSlot: number) => {
+    // Zkontrolujeme, jestli se tam hodina reálně vejde a nepřekrývá se
+    if (!checkCollision(item.id, day, timeSlot, item.duration)) return;
+    
+    setSchedule(prev => {
+      const updated = prev.map(cls => cls.id === item.id ? { ...cls, day, timeSlot } : cls);
+      // Uložíme nový stav rovnou do databáze
       syncWithSupabase(updated, subjects, timeSlots);
-  };
+      return updated;
+    });
+  }, [checkCollision, subjects, timeSlots]);
 
   const handleDropSubject = (subject: string, color: ColorData, day: number, timeSlot: number) => {
     openClassModal(day, timeSlot, subject);
@@ -427,7 +450,7 @@ function ScheduleContent() {
       setClassForm({ subject: clsToEdit.subject, teacher: clsToEdit.teacher, room: clsToEdit.room, type: clsToEdit.type, duration: clsToEdit.duration });
     } else {
       setEditingClassId(null);
-      setClassForm({ subject: defaultSubj, teacher: "", room: "", type: "Žádný", duration: 1 });
+      setClassForm({ subject: defaultSubj, teacher: "", room: "", type: "Běžný", duration: 1 });
     }
     setShowAddClassModal(true);
   };
@@ -482,38 +505,36 @@ function ScheduleContent() {
       </div>
 
       {/* Schedule Grid */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-x-auto">
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-x-auto overflow-y-auto max-h-[70vh] relative">
         <div className="w-max min-w-full">
-          {/* Header Row */}
-          <div className="gap-2 p-4 bg-gray-50 dark:bg-gray-700/50 border-b border-gray-200 dark:border-gray-700" style={{ display: 'grid', gridTemplateColumns: `40px repeat(${timeSlots.length}, ${currentCellWidth}px)` }}>
-            <div className="font-semibold text-gray-900 dark:text-white flex items-center">
+          
+          {/* Header Row (Sticky top) */}
+          <div className="sticky top-0 z-20 gap-1.5 p-3 bg-gray-50/95 dark:bg-gray-700/95 backdrop-blur-md border-b border-gray-200 dark:border-gray-700 shadow-sm" style={{ display: 'grid', gridTemplateColumns: `40px repeat(${timeSlots.length}, ${currentCellWidth}px)` }}>
+            <div className="sticky left-0 z-30 bg-gray-50 dark:bg-gray-700 font-semibold text-gray-900 dark:text-white flex items-center pr-2 text-sm">
               Den
             </div>
             {timeSlots.map((time) => (
-              <div key={time} className="font-semibold text-gray-900 dark:text-white text-center text-sm flex items-center justify-center">
+              <div key={time} className="font-semibold text-gray-900 dark:text-white text-center text-xs flex items-center justify-center">
                 {time}
               </div>
             ))}
           </div>
 
           {/* Grid Rows */}
-          <div className="p-4">
+          <div className="p-3">
             {days.map((dayName, dayIndex) => (
-              <div key={dayName} className="gap-2 mb-3" style={{ display: 'grid', gridTemplateColumns: `40px repeat(${timeSlots.length}, ${currentCellWidth}px)` }}>
-                <div className="flex items-center">
-                  <div className="font-medium text-gray-900 dark:text-white">{dayName}</div>
+              <div key={dayName} className="gap-1.5 mb-2" style={{ display: 'grid', gridTemplateColumns: `40px repeat(${timeSlots.length}, ${currentCellWidth}px)` }}>
+                {/* Sticky left day column */}
+                <div className="sticky left-0 z-10 bg-white dark:bg-gray-800 flex items-center pr-2">
+                  <div className="font-medium text-sm text-gray-900 dark:text-white">{dayName}</div>
                 </div>
                 {(() => {
                   const rowSlots = [];
-                  let skipUntil = 0;
                   
+                  // Vyhodili jsme přeskakování (skipUntil), tvoříme pozadí z 1x1 buněk vždy
                   for (let timeIndex = 0; timeIndex < timeSlots.length; timeIndex++) {
-                    // Pokud je toto políčko sežrané předchozí hodinou o délce > 1, přeskočíme ho
-                    if (timeIndex < skipUntil) continue;
-                    
                     const cls = getClassForSlot(dayIndex, timeIndex);
                     const colSpan = cls?.duration || 1;
-                    skipUntil = timeIndex + colSpan;
                     
                     rowSlots.push(
                       <TimeSlot
@@ -524,11 +545,13 @@ function ScheduleContent() {
                         isDense={isDense}
                         classData={cls}
                         abbr={cls ? (subjects[cls.subject]?.abbr || "") : ""}
-                        onDropClass={handleDropClass}
+                        checkCollision={checkCollision}
+                        onHoverClass={handleHoverClass}
+                        onDragEndClass={() => syncWithSupabase(scheduleRef.current, subjects, timeSlots)}
                         onDropSubject={handleDropSubject}
                         onEmptyClick={handleEmptyClick}
                         onClassClick={() => cls && navigate(`/panel/rozvrh/${cls.id}`)}
-                        onEditClass={() => cls && openClassModal(dayIndex, timeIndex, cls.subject, cls)}
+                        onEditClass={() => openClassModal(dayIndex, timeIndex, cls?.subject || "", cls)}
                         onDeleteClass={() => cls && handleDeleteClass(cls.id)}
                       />
                     );
@@ -594,7 +617,7 @@ function ScheduleContent() {
               <div>
                 <label className="block text-sm text-gray-600 mb-2">Typ hodiny</label>
                 <div className="flex flex-wrap gap-4">
-                  {['Žádný', 'Přednáška', 'Cvičení', 'Seminář'].map((type) => (
+                  {['Běžný', 'Přednáška', 'Cvičení', 'Seminář'].map((type) => (
                     <label key={type} className="flex items-center gap-2 cursor-pointer">
                       <input type="radio" checked={classForm.type === type} onChange={() => setClassForm({...classForm, type: type as ClassType})} className="text-indigo-500" />
                       <span className="text-sm text-gray-700 dark:text-gray-300">{type}</span>

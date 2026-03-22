@@ -9,8 +9,7 @@ export default function LoginPage() {
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          // Důležité: Přidat /#/panel přímo sem
-          redirectTo: window.location.origin,
+          redirectTo: window.location.origin + "/#/panel",
         },
       });
     };
