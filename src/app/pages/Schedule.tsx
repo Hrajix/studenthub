@@ -1,8 +1,9 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { useNavigate } from "react-router";
 import { Plus, Edit, Trash2, GripVertical, Settings2 } from "lucide-react";
+import { supabase } from "../../lib/supabase";
 
 const ItemType = "CLASS";
 
@@ -289,27 +290,84 @@ function ScheduleContent() {
     subject: "", teacher: "", room: "", type: "Žádný", duration: 1 
   });
 
+  // --- POMOCNÁ FUNKCE PRO UKLÁDÁNÍ ---
+  const syncWithSupabase = async (
+    currentSchedule?: ClassBlock[], 
+    currentSubjects?: { [key: string]: SubjectData }, 
+    currentTimeSlots?: string[]
+  ) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Pokud parametr nepřijde, použijeme aktuální stav ze useState
+      const scheduleInfo = {
+        timeSlots: currentTimeSlots || timeSlots,
+        subjects: currentSubjects || subjects,
+        blocks: currentSchedule || schedule
+      };
+
+      const { error } = await supabase
+        .from('schedule')
+        .upsert({ 
+          user: user.id, 
+          schedule_info: scheduleInfo 
+        }, { onConflict: 'user' });
+
+      if (error) throw error;
+      console.log("Synchronizováno se Supabase");
+    } catch (err) {
+      console.error("Chyba při ukládání:", err);
+    }
+  };
+
+  useEffect(() => {
+    const loadScheduleFromSupabase = async () => {
+      try {
+        // 1. Získáme přihlášeného uživatele
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        // 2. Stáhneme řádek pro tohoto uživatele
+        const { data, error } = await supabase
+          .from('schedule')
+          .select('schedule_info')
+          .eq('user', user.id)
+          .maybeSingle(); // maybeSingle nehlásí chybu, když nic nenajde
+
+        if (error) throw error;
+
+        // 3. Pokud data existují, "napumpujeme" je do stavů
+        if (data && data.schedule_info) {
+          const info = data.schedule_info;
+          
+          if (info.timeSlots) setTimeSlots(info.timeSlots);
+          if (info.subjects) setSubjects(info.subjects);
+          if (info.blocks) setSchedule(info.blocks);
+          
+          console.log("Data úspěšně načtena z databáze.");
+        }
+      } catch (err) {
+        console.error("Chyba při počátečním načítání:", err);
+      }
+    };
+
+    loadScheduleFromSupabase();
+  }, []);
+
   // --- HANDLERY PRO PŘEDMĚTY ---
   const handleSaveSubject = () => {
     if (!newSubjectName.trim()) return;
     
-    if (editingSubjectName) {
-      if (editingSubjectName !== newSubjectName) {
-        setSchedule(prev => prev.map(c => c.subject === editingSubjectName ? { ...c, subject: newSubjectName, color: newSubjectColor } : { ...c, color: newSubjectColor }));
-      } else {
-        setSchedule(prev => prev.map(c => c.subject === editingSubjectName ? { ...c, color: newSubjectColor } : c));
-      }
+    const updatedSubjects = { ...subjects };
+    if (editingSubjectName) delete updatedSubjects[editingSubjectName];
+    updatedSubjects[newSubjectName] = { color: newSubjectColor, abbr: newSubjectAbbr };
 
-      setSubjects(prev => {
-        const next = { ...prev };
-        delete next[editingSubjectName];
-        next[newSubjectName] = { color: newSubjectColor, abbr: newSubjectAbbr };
-        return next;
-      });
-    } else {
-      setSubjects(prev => ({ ...prev, [newSubjectName]: { color: newSubjectColor, abbr: newSubjectAbbr } }));
-    }
+    setSubjects(updatedSubjects);
     setShowAddSubjectModal(false);
+
+    // ODESLÁNÍ DO DB (posíláme aktualizované předměty)
+    syncWithSupabase(schedule, updatedSubjects, timeSlots);
   };
 
   const handleEditSubject = (subjName: string) => {
@@ -323,8 +381,16 @@ function ScheduleContent() {
 
   const handleDeleteSubject = (subjName: string) => {
     if(confirm(`Opravdu smazat předmět ${subjName}?`)) {
-      setSubjects(prev => { const next = {...prev}; delete next[subjName]; return next; });
-      setSchedule(prev => prev.filter(c => c.subject !== subjName));
+      const updatedSubjects = {...subjects};
+      delete updatedSubjects[subjName];
+      
+      const updatedSchedule = schedule.filter(c => c.subject !== subjName);
+      
+      setSubjects(updatedSubjects);
+      setSchedule(updatedSchedule);
+
+      // Odeslat smazání do DB
+      syncWithSupabase(updatedSchedule, updatedSubjects, timeSlots);
     }
   };
 
@@ -339,7 +405,9 @@ function ScheduleContent() {
 
   // --- HANDLERY PRO HODINY ---
   const handleDropClass = (item: ClassBlock, day: number, timeSlot: number) => {
-    setSchedule(prev => prev.map(cls => cls.id === item.id ? { ...cls, day, timeSlot } : cls));
+      const updated = schedule.map(cls => cls.id === item.id ? { ...cls, day, timeSlot } : cls);
+      setSchedule(updated);
+      syncWithSupabase(updated, subjects, timeSlots);
   };
 
   const handleDropSubject = (subject: string, color: ColorData, day: number, timeSlot: number) => {
@@ -366,23 +434,34 @@ function ScheduleContent() {
     if (!classForm.subject) return;
     const color = subjects[classForm.subject]?.color || DEFAULT_COLOR;
     
+    let updated;
     if (editingClassId) {
-      setSchedule(prev => prev.map(c => c.id === editingClassId ? { ...c, ...classForm, color } : c));
+      updated = schedule.map(c => c.id === editingClassId ? { ...c, ...classForm, color } : c);
     } else {
-      setSchedule(prev => [...prev, {
-        id: Math.random().toString(),
+      updated = [...schedule, {
+        id: Math.random().toString(), // Tady doporučuji crypto.randomUUID(), pokud nepoužíváš starší prohlížeče
         ...classForm,
         color,
         day: draftSlot.day,
         timeSlot: draftSlot.timeSlot,
-      }]);
+      }];
     }
+    
+    setSchedule(updated);
     setShowAddClassModal(false);
+    
+    // TADY JE TO KLÍČOVÉ:
+    // Posíláme 'updated', protože 'schedule' v tuhle chvíli ještě není v Reactu aktualizované
+    syncWithSupabase(updated, subjects, timeSlots);
   };
 
-  const handleDeleteClass = (id: string) => {
-    setSchedule(prev => prev.filter(c => c.id !== id));
-  };
+    const handleDeleteClass = (id: string) => {
+      const updatedSchedule = schedule.filter(c => c.id !== id);
+      setSchedule(updatedSchedule);
+      
+      // Odeslat smazání do DB
+      syncWithSupabase(updatedSchedule, subjects, timeSlots);
+    };
 
   const getClassForSlot = (day: number, timeSlot: number) => schedule.find(cls => cls.day === day && cls.timeSlot === timeSlot);
 
@@ -630,17 +709,28 @@ function ScheduleContent() {
                     const newSlots = [...timeSlots];
                     newSlots[index] = val;
                     setTimeSlots(newSlots);
+                    syncWithSupabase(schedule, subjects, newSlots);
                   }}
-                  deleteSlot={(index) => setTimeSlots(timeSlots.filter((_, i) => i !== index))}
+                  deleteSlot={(index) => {
+                    const updated = timeSlots.filter((_, i) => i !== index);
+                    setTimeSlots(updated);
+                    syncWithSupabase(schedule, subjects, updated);
+                  }}
                 />
               ))}
             </div>
             <button onClick={() => setTimeSlots([...timeSlots, "00:00 - 00:00"])} className="w-full py-2 mb-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
               <Plus className="w-5 h-5 mx-auto" />
             </button>
-            <button onClick={() => setShowEditTimesModal(false)} className="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors">
-              Hotovo
-            </button>
+              <button 
+                onClick={() => {
+                  setShowEditTimesModal(false);
+                  syncWithSupabase(schedule, subjects, timeSlots); // Uloží časy
+                }} 
+                className="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+              >
+                Hotovo
+              </button>
           </div>
         </div>
       )}
