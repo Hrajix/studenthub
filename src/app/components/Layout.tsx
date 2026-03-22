@@ -56,7 +56,10 @@ export default function Layout() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    // Navigaci řeší onAuthStateChange výše
+    
+    setUser(null);
+
+    window.location.href = window.location.origin + '/#/';
   };
 
   const toggleTheme = () => {
