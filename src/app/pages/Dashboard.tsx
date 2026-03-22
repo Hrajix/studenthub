@@ -1,12 +1,48 @@
-import { Calendar, Clock, BookOpen, AlertCircle, TrendingUp } from "lucide-react";
+import { Calendar, Clock, BookOpen, AlertCircle, TrendingUp, CalendarCheck } from "lucide-react";
+import { useEffect, useState, useMemo } from "react"; // Přidán useMemo
 import { Link } from "react-router";
+import { supabase } from "../../lib/supabase";
 
 export default function Dashboard() {
-  const todaySchedule = [
-    { id: 1, subject: "Matematika", time: "08:00 - 09:30", teacher: "Mgr. Novák", color: "bg-blue-500", room: "A201" },
-    { id: 2, subject: "Čeština", time: "09:45 - 11:15", teacher: "Mgr. Svobodová", color: "bg-green-500", room: "B105" },
-    { id: 3, subject: "Fyzika", time: "11:30 - 13:00", teacher: "Dr. Dvořák", color: "bg-purple-500", room: "C302" },
-  ];
+  const [schedule, setSchedule] = useState([]);
+  const [timeSlots, setTimeSlots] = useState([]);
+
+  useEffect(() => {
+    const fetchTodayData = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('schedule')
+        .select('schedule_info')
+        .eq('user', user.id)
+        .maybeSingle();
+
+      if (data?.schedule_info) {
+        setSchedule(data.schedule_info.blocks || []);
+        setTimeSlots(data.schedule_info.timeSlots || []);
+      }
+    };
+
+    fetchTodayData();
+  }, []);
+
+  // --- TADY JE TA CHYBĚJÍCÍ ČÁST ---
+  const todaySchedule = useMemo(() => {
+    const now = new Date();
+    // Převod: Neděle(0) -> 6, Pondělí(1) -> 0...
+    const currentDayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
+
+    return schedule
+      .filter((item) => item.day === currentDayIndex)
+      .sort((a, b) => a.timeSlot - b.timeSlot)
+      .map((item) => ({
+        ...item,
+        // Propojíme index slotu s reálným časem z timeSlots
+        time: timeSlots[item.timeSlot] || "Neznámý čas",
+      }));
+  }, [schedule, timeSlots]);
+  // --------------------------------
 
   const upcomingTests = [
     { id: 1, subject: "Matematika", date: "2026-03-22", type: "Písemka", topic: "Integrály", daysLeft: 4 },
@@ -32,8 +68,8 @@ export default function Dashboard() {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
           Vítej zpět! 👋
         </h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Dnes je středa, 18. března 2026
+        <p className="text-gray-600 dark:text-gray-400 capitalize">
+          Dnes je {new Date().toLocaleDateString("cs-CZ", { weekday: "long"})}, {new Date().toLocaleDateString("cs-CZ", {day: "numeric", month: "long" })}
         </p>
       </div>
 
@@ -74,31 +110,47 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="p-6 space-y-4">
-            {todaySchedule.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-start gap-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-              >
-                <div className={`w-1 h-full ${item.color} rounded-full`}></div>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">
-                      {item.subject}
-                    </h3>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">
-                      {item.room}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      {item.time}
-                    </span>
-                    <span>{item.teacher}</span>
+            {todaySchedule.length > 0 ? (
+              todaySchedule.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-stretch gap-4 p-4 rounded-xl bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                >
+                  {/* Barevný proužek - opraveno pro HSL objekty */}
+                  <div 
+                    className="w-1.5 rounded-full" 
+                    style={{ 
+                      backgroundColor: item.color 
+                        ? `hsl(${item.color.h}, ${item.color.s}%, ${item.color.l}%)` 
+                        : '#6366f1' 
+                    }}
+                  ></div>
+                  
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <h3 className="font-semibold text-gray-900 dark:text-white">
+                        {item.subject}
+                      </h3>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {item.room || "—"}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-4 h-4" />
+                        {item.time}
+                      </span>
+                      <span>{item.teacher}</span>
+                    </div>
                   </div>
                 </div>
+              ))
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-gray-500 dark:text-gray-400">
+                <CalendarCheck className="w-12 h-12 mb-2 opacity-20" />
+                <p>Dnes nemáš žádné hodiny. 🎉</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
 
