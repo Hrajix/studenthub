@@ -5,14 +5,14 @@ import { supabase } from "../../lib/supabase";
 export default function LoginPage() {
   const navigate = useNavigate();
 
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: {
-      // window.location.origin je "https://www.studenthub.fun"
-      // Přidáváme /#/panel, aby se vrátil přímo do aplikace
-      redirectTo: window.location.origin + '/#/panel',
-    },
-  });
+  const handleGoogleLogin = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        // Supabase tě po přihlášení hodí sem
+        redirectTo: window.location.origin + '/#/panel', 
+      },
+    });
 
     if (error) {
       console.error("Chyba při přihlášení:", error.message);
