@@ -78,14 +78,26 @@ export default function Layout() {
   }, [navigate]);
 
   const handleLogout = async () => {
+    console.log("Tlačítko odhlásit stisknuto!"); // Zkontroluj v F12, jestli se tohle vypíše
+
     try {
-      await supabase.auth.signOut();
-      setUser(null);
-      // Hard reset URL pro vyčištění zbytků session v hash
-      window.location.href = window.location.origin + '/#/';
+      // 1. Okamžitě smažeme vše z LocalStorage (tady si Supabase drží session)
+      // Tohle je "atomovka", která Chrome donutí zapomenout, že jsi byl přihlášený
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // 2. Pokusíme se o korektní odhlášení na pozadí (nečekáme na await)
+      supabase.auth.signOut().catch(err => console.error("Supabase signOut error:", err));
+
+      // 3. Okamžitý restart aplikace na čistou adresu
+      // window.location.assign je drsnější než href
+      window.location.assign(window.location.origin + '/#/login');
+      
+      // 4. Pro jistotu vynutíme reload
+      window.location.reload();
     } catch (error) {
-      console.error("Chyba při odhlášení:", error);
-      navigate("/login");
+      console.error("Kritická chyba při logoutu:", error);
+      window.location.href = '/#/login';
     }
   };
 
