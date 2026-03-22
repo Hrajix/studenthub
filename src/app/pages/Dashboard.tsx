@@ -66,7 +66,7 @@ export default function Dashboard() {
                 Dnešní rozvrh
               </h2>
               <Link
-                to="/rozvrh"
+                to="/panel/rozvrh"
                 className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
               >
                 Zobrazit vše
@@ -110,7 +110,7 @@ export default function Dashboard() {
                 Nadcházející testy
               </h2>
               <Link
-                to="/testy"
+                to="/panel/testy"
                 className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
               >
                 Zobrazit vše
@@ -156,7 +156,7 @@ export default function Dashboard() {
                 Rychlé poznámky
               </h2>
               <Link
-                to="/zapisnik"
+                to="/panel/zapisnik"
                 className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
               >
                 Zobrazit vše
