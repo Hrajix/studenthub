@@ -295,7 +295,6 @@ function ScheduleContent() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        console.error("DEBUG: Uživatel není přihlášen!");
         return;
       }
 
@@ -305,7 +304,6 @@ function ScheduleContent() {
         blocks: currentSchedule || schedule
       };
 
-      console.log("DEBUG: Pokouším se uložit data pro uživatele:", user.id);
 
       const { data, error } = await supabase
         .from('schedule')
@@ -316,12 +314,12 @@ function ScheduleContent() {
         .select(); // Přidáme select, abychom viděli, co se vrátilo
 
       if (error) {
-        console.error("DEBUG: Chyba ze Supabase:", error.message, error.details, error.hint);
+
       } else {
-        console.log("DEBUG: Úspěšně uloženo, vrácená data:", data);
+        
       }
     } catch (err) {
-      console.error("DEBUG: Kritická chyba v JS:", err);
+
     }
   };
 
