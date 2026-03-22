@@ -78,7 +78,6 @@ export default function Layout() {
   }, [navigate]);
 
   const handleLogout = async () => {
-    console.log("Tlačítko odhlásit stisknuto!"); // Zkontroluj v F12, jestli se tohle vypíše
 
     try {
       // 1. Okamžitě smažeme vše z LocalStorage (tady si Supabase drží session)
@@ -91,12 +90,11 @@ export default function Layout() {
 
       // 3. Okamžitý restart aplikace na čistou adresu
       // window.location.assign je drsnější než href
-      window.location.assign(window.location.origin + '/#/login');
+      window.location.assign(window.location.origin + '/');
       
       // 4. Pro jistotu vynutíme reload
       window.location.reload();
     } catch (error) {
-      console.error("Kritická chyba při logoutu:", error);
       window.location.href = '/#/login';
     }
   };
