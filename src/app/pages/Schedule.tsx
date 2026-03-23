@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend, getEmptyImage } from "react-dnd-html5-backend"; // Nové: getEmptyImage
 import { useNavigate } from "react-router";
-import { motion } from "framer-motion"; // Nové: framer-motion
+import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Edit, Trash2, GripVertical, Settings2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
@@ -62,13 +62,22 @@ interface DraggableClassProps {
   classData: ClassBlock;
   abbr: string;
   isDense?: boolean;
+  isDeleting?: boolean;
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onDragEnd: () => void; // Vráceno zpět pro ukládání po puštění
 }
 
-function DraggableClass({ classData, abbr, isDense, onClick, onEdit, onDelete, onDragEnd }: DraggableClassProps) {
+
+const seenClassIds = new Set<string>();
+
+function DraggableClass({ classData, abbr, isDense, isDeleting, onClick, onEdit, onDelete, onDragEnd }: DraggableClassProps) {
+  const isNewRef = useRef(!seenClassIds.has(classData.id));
+  useEffect(() => {
+    seenClassIds.add(classData.id);
+  }, [classData.id]);
+
   const [{ isDragging }, drag, dragPreview] = useDrag({
     type: ItemType,
     item: { ...classData },
@@ -105,16 +114,18 @@ function DraggableClass({ classData, abbr, isDense, onClick, onEdit, onDelete, o
         onClick={onClick}
         style={{ backgroundColor: bg, color: textCol, border }}
         layoutId={classData.id}
+        initial={isNewRef.current ? { opacity: 0, scale: 0.8 } : false}
+        animate={{ opacity: isDeleting ? 0 : 1, scale: isDeleting ? 0.8 : 1 }}
         transition={animationConfig}
         className={`relative rounded-lg ${shouldShrink ? 'p-1.5' : 'p-2'} h-full flex flex-col justify-between ${
           isDragging 
             // OPRAVA 1: Smazáno "opacity-90", barva už se při přesunu nikdy opticky nezmění
-            ? "is-dragging scale-[1.05] rotate-1 shadow-2xl ring-4 ring-indigo-400/50 z-50" 
+            ? "is-dragging scale-[1.05] rotate-1 shadow-2xl ring-4 ring-indigo-400/50 z-[999]" 
             : "shadow-sm hover:shadow-md transition-shadow"
         }`}
       >
-        {/* Plovoucí bublina s akcemi */}
-        <div className="absolute -top-2 -right-2 hidden group-hover:flex gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md rounded-lg p-0.5 z-20">
+        {/* Plovoucí bublina s akcemi - Plynulá animace */}
+        <div className="absolute -top-2 -right-2 flex gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md rounded-lg p-0.5 z-20 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto translate-y-1 group-hover:translate-y-0 transition-all duration-200 ease-out">
           <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition-colors"><Edit size={12} /></button>
           <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"><Trash2 size={12} /></button>
         </div>
@@ -150,8 +161,13 @@ function DraggableSubject({ subject, data, onEdit, onDelete }: { subject: string
   });
 
   return (
-    <div
-      ref={drag}
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      transition={{ duration: 0.15 }}
+      ref={drag as any}
       className={`select-none group relative flex items-center gap-2 cursor-grab active:cursor-grabbing p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-100 dark:border-gray-700 ${
         isDragging ? "opacity-50" : "opacity-100"
       }`}
@@ -162,10 +178,44 @@ function DraggableSubject({ subject, data, onEdit, onDelete }: { subject: string
         <span className="text-[10px] text-gray-500 font-mono">{data.abbr}</span>
       </div>
       
-      <div className="absolute -top-3 -right-2 hidden group-hover:flex items-center gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-md px-1 py-0.5 rounded-lg z-20">
+      <div className="absolute -top-3 -right-2 flex items-center gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-md px-1 py-0.5 rounded-lg z-20 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto translate-y-1 group-hover:translate-y-0 transition-all duration-200 ease-out">        
         <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded"><Edit size={14} /></button>
         <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded"><Trash2 size={14} /></button>
       </div>
+    </motion.div>
+  );
+}
+
+const TIME_SLOT_TYPE = "TIME_SLOT";
+
+function DraggableTimeSlotItem({ index, slot, moveSlot, updateSlot, deleteSlot }: any) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [{ handlerId }, drop] = useDrop({
+    accept: TIME_SLOT_TYPE,
+    collect(monitor) { return { handlerId: monitor.getHandlerId() }; },
+    hover(item: any, monitor) {
+      if (!ref.current) return;
+      const dragIndex = item.index;
+      const hoverIndex = index;
+      if (dragIndex === hoverIndex) return;
+      moveSlot(dragIndex, hoverIndex);
+      item.index = hoverIndex;
+    },
+  });
+  
+  const [{ isDragging }, drag] = useDrag({
+    type: TIME_SLOT_TYPE,
+    item: () => ({ index }),
+    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+  });
+  
+  drag(drop(ref));
+
+  return (
+    <div ref={ref} data-handler-id={handlerId} className={`flex items-center gap-2 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mb-2 transition-opacity ${isDragging ? 'opacity-50' : 'opacity-100'}`}>
+      <GripVertical className="text-gray-400 cursor-grab active:cursor-grabbing w-5 h-5 shrink-0" />
+      <input type="text" value={slot} onChange={(e) => updateSlot(index, e.target.value)} className="flex-1 bg-transparent border-none focus:ring-0 p-1 text-sm text-gray-900 dark:text-white outline-none" />
+      <button onClick={() => deleteSlot(index)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"><Trash2 size={16}/></button>
     </div>
   );
 }
@@ -177,6 +227,7 @@ interface TimeSlotProps {
   abbr: string;
   colSpan?: number;
   isDense?: boolean;
+  isDeleting?: boolean;
   checkCollision: (classId: string | null, day: number, timeSlot: number, duration: number) => boolean;
   onHoverClass: (id: string, day: number, timeSlot: number) => void;
   onDragEndClass: () => void;
@@ -187,7 +238,7 @@ interface TimeSlotProps {
   onDeleteClass: () => void;
 }
 
-function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, checkCollision, onHoverClass, onDragEndClass, onDropSubject, onEmptyClick, onClassClick, onEditClass, onDeleteClass }: TimeSlotProps) {
+function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, isDeleting, checkCollision, onHoverClass, onDragEndClass, onDropSubject, onEmptyClick, onClassClick, onEditClass, onDeleteClass }: TimeSlotProps) {
   const [{ isOver, canDrop, itemType }, drop] = useDrop({
     accept: ["CLASS", "SUBJECT"],
     dropEffect: "move",
@@ -250,26 +301,27 @@ function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, checkC
 
   return (
     <div
-      ref={drop}
+      ref={drop as any}
       onClick={() => { if (!classData) onEmptyClick(day, timeSlot); }}
-      // Zásadní: Hodina se vrací do gridu a fyzicky se roztáhne přes víc sloupců
-      style={{ gridColumn: colSpan > 1 ? `span ${colSpan}` : undefined }}
-      className={`min-h-[72px] min-w-0 rounded-lg transition-colors relative group cursor-pointer h-full ${
+      className={`min-h-[72px] min-w-0 rounded-lg transition duration-200 relative group cursor-pointer h-full ${
         isSubjectHighlight 
-          ? "bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-600" 
+          ? "bg-indigo-50 dark:bg-indigo-900/30 border-2 border-dashed border-indigo-400 dark:border-indigo-500 scale-[0.96]" 
           : (classData 
               ? "border border-transparent bg-transparent" 
               : "bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700")
-      } ${classData ? 'z-10' : 'z-0'} has-[.is-dragging]:z-50`}
+      } ${classData ? 'z-10' : 'z-0'} has-[.is-dragging]:z-[999]`}
     >
       {classData ? (
-        // Vyhozeno "absolute inset-y-0", karta je teď normálně v dokumentu a může natahovat výšku řádku!
-        <div className="w-full h-full z-20">
-          <DraggableClass classData={classData} abbr={abbr} isDense={isDense} onClick={onClassClick} onEdit={onEditClass} onDelete={onDeleteClass} onDragEnd={onDragEndClass} />
+        <div 
+          className="relative z-20 h-full"
+          style={{ width: `calc(${colSpan * 100}% + ${(colSpan - 1) * 6}px)` }}
+        >
+          <DraggableClass classData={classData} abbr={abbr} isDense={isDense} isDeleting={isDeleting} onClick={onClassClick} onEdit={onEditClass} onDelete={onDeleteClass} onDragEnd={onDragEndClass} />
         </div>
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-0">
-          <Plus className="w-5 h-5 text-gray-300 dark:text-gray-600" />
+        // VYLEPŠENÍ: Ikonka plus se při hoveru předmětem rozsvítí modře
+        <div className={`absolute inset-0 flex items-center justify-center transition-opacity z-0 pointer-events-none ${isSubjectHighlight ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          <Plus className={`w-5 h-5 transition-colors ${isSubjectHighlight ? 'text-indigo-500' : 'text-gray-300 dark:text-gray-600'}`} />
         </div>
       )}
     </div>
@@ -305,6 +357,8 @@ function ScheduleContent() {
 
   // --- STAVY ROZVRHU ---
   const [schedule, setSchedule] = useState<ClassBlock[]>([]);
+  const [deletingClassIds, setDeletingClassIds] = useState<string[]>([]); // TENTO ŘÁDEK CHYBĚL!
+  const [deletePrompt, setDeletePrompt] = useState<{ isOpen: boolean; type: 'SUBJECT' | 'CLASS' | null; id: string | null; title: string }>({ isOpen: false, type: null, id: null, title: "" });
   // Pomocná reference pro jistotu, že funkce vždy vidí poslední data
   const scheduleRef = useRef(schedule);
   useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
@@ -413,19 +467,44 @@ function ScheduleContent() {
     setShowAddSubjectModal(true);
   };
 
-  const handleDeleteSubject = (subjName: string) => {
-    if(confirm(`Opravdu smazat předmět ${subjName}?`)) {
-      const updatedSubjects = {...subjects};
-      delete updatedSubjects[subjName];
-      
-      const updatedSchedule = schedule.filter(c => c.subject !== subjName);
-      
-      setSubjects(updatedSubjects);
-      setSchedule(updatedSchedule);
-
-      // Odeslat smazání do DB
-      syncWithSupabase(updatedSchedule, updatedSubjects, timeSlots);
+  const executeDeleteSubject = (subjName: string) => {
+    // 1. Najdeme ID všech hodin, které patří k tomuto předmětu
+    const classesToDelete = schedule.filter(c => c.subject === subjName).map(c => c.id);
+    
+    // 2. Zapneme jim animaci mizení
+    if (classesToDelete.length > 0) {
+      setDeletingClassIds(prev => [...prev, ...classesToDelete]);
     }
+
+    // 3. Počkáme 150ms na dokončení animace a pak teprve smažeme data
+    setTimeout(() => {
+      setSubjects(prevSubj => {
+        const updatedSubjects = { ...prevSubj };
+        delete updatedSubjects[subjName];
+        
+        setSchedule(prevSched => {
+          const updatedSchedule = prevSched.filter(c => c.subject !== subjName);
+          syncWithSupabase(updatedSchedule, updatedSubjects, timeSlots);
+          return updatedSchedule;
+        });
+        
+        return updatedSubjects;
+      });
+
+      // Uklidíme ID z mazacího pole
+      if (classesToDelete.length > 0) {
+        setDeletingClassIds(prev => prev.filter(id => !classesToDelete.includes(id)));
+      }
+    }, 150);
+  };
+
+  const handleDeleteSubject = (subjName: string) => {
+    setDeletePrompt({
+      isOpen: true,
+      type: 'SUBJECT',
+      id: subjName,
+      title: `Opravdu chcete smazat předmět ${subjName}? Smažou se i všechny jeho hodiny v rozvrhu.`
+    });
   };
 
   const openNewSubjectModal = () => {
@@ -507,18 +586,38 @@ function ScheduleContent() {
     setSchedule(updated);
     setShowAddClassModal(false);
     
-    // TADY JE TO KLÍČOVÉ:
     // Posíláme 'updated', protože 'schedule' v tuhle chvíli ještě není v Reactu aktualizované
     syncWithSupabase(updated, subjects, timeSlots);
   };
 
-    const handleDeleteClass = (id: string) => {
-      const updatedSchedule = schedule.filter(c => c.id !== id);
-      setSchedule(updatedSchedule);
-      
-      // Odeslat smazání do DB
-      syncWithSupabase(updatedSchedule, subjects, timeSlots);
-    };
+    const executeDeleteClass = (id: string) => {
+    setDeletingClassIds(prev => [...prev, id]); 
+    setTimeout(() => {
+      setSchedule(prev => {
+        const updated = prev.filter(c => c.id !== id);
+        syncWithSupabase(updated, subjects, timeSlots); 
+        return updated;
+      });
+      setDeletingClassIds(prev => prev.filter(dId => dId !== id));
+    }, 150);
+  };
+
+  const handleDeleteClass = (id: string) => {
+    const cls = schedule.find(c => c.id === id);
+    if (!cls) return;
+    setDeletePrompt({
+      isOpen: true,
+      type: 'CLASS',
+      id: id,
+      title: `Opravdu chcete smazat tuto hodinu (${cls.subject}) z rozvrhu?`
+    });
+  };
+
+  const confirmDelete = () => {
+    if (deletePrompt.type === 'SUBJECT' && deletePrompt.id) executeDeleteSubject(deletePrompt.id);
+    if (deletePrompt.type === 'CLASS' && deletePrompt.id) executeDeleteClass(deletePrompt.id);
+    setDeletePrompt({ ...deletePrompt, isOpen: false });
+  };
 
   const getClassForSlot = (day: number, timeSlot: number) => schedule.find(cls => cls.day === day && cls.timeSlot === timeSlot);
 
@@ -555,22 +654,19 @@ function ScheduleContent() {
           {/* Grid Rows */}
           <div className="p-3">
             {days.map((dayName, dayIndex) => (
-              <div key={dayName} className="gap-1.5 mb-2" style={{ display: 'grid', gridTemplateColumns: `40px repeat(${timeSlots.length}, ${currentCellWidth}px)` }}>
+              // OPRAVA 1: Žádný motion.div layout na řádcích! Tím se opraví Z-Index a ořezávání stínů.
+              <div key={dayName} className="gap-1.5 mb-2 relative" style={{ display: 'grid', gridTemplateColumns: `40px repeat(${timeSlots.length}, ${currentCellWidth}px)` }}>
                 {/* Sticky left day column */}
                 <div className="sticky left-0 z-10 bg-white dark:bg-gray-800 flex items-center pr-2">
                   <div className="font-medium text-sm text-gray-900 dark:text-white">{dayName}</div>
                 </div>
                 {(() => {
                   const rowSlots = [];
-                  let skipUntil = 0;
-                  
-                  // Návrat k původnímu: když má hodina 2 bloky, fyzicky zabere místo a další políčko přeskočíme
+                  // OPRAVA 2: Smazáno "skipUntil". Vykreslíme i ty prázdné buňky, co jsou pod dlouhou hodinou, 
+                  // aby fungovaly jako lapače myši pro posouvání po JEDNOM políčku.
                   for (let timeIndex = 0; timeIndex < timeSlots.length; timeIndex++) {
-                    if (timeIndex < skipUntil) continue;
-                    
                     const cls = getClassForSlot(dayIndex, timeIndex);
                     const colSpan = cls?.duration || 1;
-                    skipUntil = timeIndex + colSpan;
                     
                     rowSlots.push(
                       <TimeSlot
@@ -579,6 +675,7 @@ function ScheduleContent() {
                         timeSlot={timeIndex}
                         colSpan={colSpan}
                         isDense={isDense}
+                        isDeleting={cls ? deletingClassIds.includes(cls.id) : false}
                         classData={cls}
                         abbr={cls ? (subjects[cls.subject]?.abbr || "") : ""}
                         checkCollision={checkCollision}
@@ -609,192 +706,313 @@ function ScheduleContent() {
           </button>
         </div>
         <div className="flex flex-wrap gap-3">
-          {Object.entries(subjects).map(([subj, data]) => (
-            <DraggableSubject key={subj} subject={subj} data={data} onEdit={() => handleEditSubject(subj)} onDelete={() => handleDeleteSubject(subj)} />
-          ))}
+          <AnimatePresence>
+            {Object.entries(subjects).map(([subj, data]) => (
+              <DraggableSubject key={subj} subject={subj} data={data} onEdit={() => handleEditSubject(subj)} onDelete={() => handleDeleteSubject(subj)} />
+            ))}
+          </AnimatePresence>
         </div>
       </div>
 
       {/* MODAL: Přidat/Upravit Hodinu */}
-      {showAddClassModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-              {editingClassId ? "Upravit hodinu" : "Přidat hodinu do rozvrhu"}
-            </h3>
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Předmět</label>
-                <select value={classForm.subject} onChange={(e) => setClassForm({...classForm, subject: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
-                  {Object.keys(subjects).map(sub => <option key={sub} value={sub}>{sub}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+      <AnimatePresence>
+        {showAddClassModal && (
+          <motion.div 
+            key="modal-backdrop-class"
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6"
+            >
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                {editingClassId ? "Upravit hodinu" : "Přidat hodinu do rozvrhu"}
+              </h3>
+              <div className="space-y-4 mb-6">
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Vyučující</label>
-                  <input type="text" value={classForm.teacher} onChange={(e) => setClassForm({...classForm, teacher: e.target.value})} placeholder="Např. Novák" className="w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                  <label className="block text-sm text-gray-600 mb-1">Předmět</label>
+                  <select value={classForm.subject} onChange={(e) => setClassForm({...classForm, subject: e.target.value})} className="w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white">
+                    {Object.keys(subjects).map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                  </select>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Vyučující</label>
+                    <input type="text" value={classForm.teacher} onChange={(e) => setClassForm({...classForm, teacher: e.target.value})} placeholder="Např. Novák" className="w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 mb-1">Místnost</label>
+                    <input type="text" value={classForm.room} onChange={(e) => setClassForm({...classForm, room: e.target.value})} placeholder="Např. A201" className="w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                  </div>
+                </div>
+                {/* 1. Vlastní Number Input s tlačítky vpravo a 100% schovanými defaultními šipkami */}
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">Místnost</label>
-                  <input type="text" value={classForm.room} onChange={(e) => setClassForm({...classForm, room: e.target.value})} placeholder="Např. A201" className="w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                  <label className="block text-sm text-gray-600 mb-1">Délka (počet bloků)</label>
+                  <div className="flex items-center w-full border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-shadow bg-white dark:bg-gray-800">
+                    <input 
+                      type="number" 
+                      min="1" 
+                      max={timeSlots.length - draftSlot.timeSlot} 
+                      value={classForm.duration} 
+                      onChange={(e) => setClassForm({...classForm, duration: parseInt(e.target.value) || 1})} 
+                      // Magie na zrušení šipek: Tailwind class pro Webkit a m-0 + inline styl pro Firefox
+                      className="flex-1 bg-transparent border-none p-2 pl-3 dark:text-white focus:ring-0 font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"                      style={{ MozAppearance: 'textfield' }} 
+                    />
+                    <div className="flex border-l border-gray-200 dark:border-gray-600">
+                      <button
+                        type="button"
+                        onClick={() => setClassForm(prev => ({ ...prev, duration: Math.max(1, prev.duration - 1) }))}
+                        className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-600 transition-colors active:bg-gray-200 dark:active:bg-gray-500 font-bold border-r border-gray-200 dark:border-gray-600"
+                      >
+                        -
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setClassForm(prev => ({ ...prev, duration: Math.min(timeSlots.length - draftSlot.timeSlot, prev.duration + 1) }))}
+                        className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-600 transition-colors active:bg-gray-200 dark:active:bg-gray-500 font-bold"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Animované custom Radio Buttony */}
+                <div>
+                  <label className="block text-sm text-gray-600 mb-2">Typ hodiny</label>
+                  <div className="flex flex-wrap gap-4">
+                    {['Běžný', 'Přednáška', 'Cvičení', 'Seminář'].map((type) => {
+                      const isChecked = classForm.type === type;
+                      return (
+                        <label key={type} className="flex items-center gap-2 cursor-pointer group">
+                          {/* Skutečný input schováme, ale necháme ho tu kvůli logice */}
+                          <input type="radio" className="hidden" checked={isChecked} onChange={() => setClassForm({...classForm, type: type as ClassType})} />
+                          
+                          {/* Náš falešný, krásně animovaný radio button */}
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-colors duration-200 ease-in-out ${isChecked ? 'border-indigo-500' : 'border-gray-300 dark:border-gray-500 group-hover:border-indigo-400'}`}>
+                            <div className={`w-2 h-2 rounded-full bg-indigo-500 transition-transform duration-150 ease-out ${isChecked ? 'scale-100' : 'scale-0'}`} />
+                          </div>
+                          
+                          <span className="text-sm text-gray-700 dark:text-gray-300">{type}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Délka (počet bloků)</label>
-                <input 
-                  type="number" 
-                  min="1" 
-                  max={timeSlots.length - draftSlot.timeSlot} 
-                  value={classForm.duration} 
-                  onChange={(e) => setClassForm({...classForm, duration: parseInt(e.target.value) || 1})} 
-                  className="w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" 
-                />
+
+              {/* 3. Tlačítka s animací zmáčknutí (active:scale-95) a plynulým hoverem */}
+              <div className="flex gap-3">
+                <button onClick={() => setShowAddClassModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 active:scale-95 transition-all duration-200 dark:border-gray-600 dark:text-white dark:hover:bg-gray-700">Zrušit</button>
+                <button onClick={handleSaveClass} className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 shadow-sm hover:shadow active:scale-95 transition-all duration-200">Uložit</button>
               </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-2">Typ hodiny</label>
-                <div className="flex flex-wrap gap-4">
-                  {['Běžný', 'Přednáška', 'Cvičení', 'Seminář'].map((type) => (
-                    <label key={type} className="flex items-center gap-2 cursor-pointer">
-                      <input type="radio" checked={classForm.type === type} onChange={() => setClassForm({...classForm, type: type as ClassType})} className="text-indigo-500" />
-                      <span className="text-sm text-gray-700 dark:text-gray-300">{type}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setShowAddClassModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 dark:border-gray-600 dark:text-white">Zrušit</button>
-              <button onClick={handleSaveClass} className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600">Uložit</button>
-            </div>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* MODAL: Přidat/Upravit Předmět */}
-      {showAddSubjectModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-              {editingSubjectName ? "Upravit předmět" : "Vytvořit nový předmět"}
-            </h3>
-            <div className="space-y-4 mb-6">
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Název předmětu</label>
-                <input type="text" value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} placeholder="Např. Databázové systémy" className="w-full p-3 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-              </div>
-              <div>
-                <label className="block text-sm text-gray-600 mb-1">Zkratka</label>
-                <input type="text" value={newSubjectAbbr} onChange={(e) => setNewSubjectAbbr(e.target.value.toUpperCase())} maxLength={6} placeholder="Např. DNSD" className="w-full p-3 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
-              </div>
-              
-              {/* Výběr barvy - Odstíny a jejich tmavé varianty */}
-              <div>
-                <label className="block text-sm text-gray-600 dark:text-gray-400 mb-3">Vyber barvu (odstín a tmavost)</label>
-                <div className="grid grid-cols-6 gap-x-3 gap-y-4">
-                  {PREDEFINED_HUES.map((hue) => {
-                    // Definujeme dvě varianty pro každý odstín
-                    const variants = [
-                      { h: hue, s: 75, l: 55 }, // Normální/Sytá
-                      { h: hue, s: 75, l: 30 }, // Tmavá
-                    ];
+      <AnimatePresence>
+        {showAddSubjectModal && (
+          <motion.div 
+            key="modal-backdrop-subj"
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6"
+            >
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+                {editingSubjectName ? "Upravit předmět" : "Vytvořit nový předmět"}
+              </h3>
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Název předmětu</label>
+                  <input type="text" value={newSubjectName} onChange={(e) => setNewSubjectName(e.target.value)} placeholder="Např. Databázové systémy" className="w-full p-3 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">Zkratka</label>
+                  <input type="text" value={newSubjectAbbr} onChange={(e) => setNewSubjectAbbr(e.target.value.toUpperCase())} maxLength={6} placeholder="Např. DNSD" className="w-full p-3 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                </div>
+                
+                {/* Výběr barvy - Odstíny a jejich tmavé varianty */}
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-3">Vyber barvu (odstín a tmavost)</label>
+                  <div className="grid grid-cols-6 gap-x-3 gap-y-4">
+                    {PREDEFINED_HUES.map((hue) => {
+                      const variants = [
+                        { h: hue, s: 75, l: 55 }, // Normální/Sytá
+                        { h: hue, s: 75, l: 30 }, // Tmavá
+                      ];
 
-                    return (
-                      <div key={hue} className="flex flex-col gap-4">
-                        {variants.map((v, idx) => {
-                          const isSelected = newSubjectColor.h === v.h && newSubjectColor.l === v.l;
-                          return (
-                            <button
-                              key={idx}
-                              type="button"
-                              onClick={(e) => { e.preventDefault(); setNewSubjectColor(v); }}
-                              className={`w-10 aspect-square rounded-lg shadow-sm transition-all outline-none ${
-                                isSelected 
-                                  ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-gray-800 scale-110 z-10' 
-                                  : 'hover:scale-105 hover:ring-2 hover:ring-gray-300 dark:hover:ring-gray-600'
-                              }`}
-                              style={{ backgroundColor: `hsl(${v.h}, ${v.s}%, ${v.l}%)` }}
-                            />
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
+                      return (
+                        <div key={hue} className="flex flex-col gap-4">
+                          {variants.map((v, idx) => {
+                            const isSelected = newSubjectColor.h === v.h && newSubjectColor.l === v.l;
+                            return (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={(e) => { e.preventDefault(); setNewSubjectColor(v); }}
+                                className={`w-10 aspect-square rounded-lg shadow-sm transition-all outline-none ${
+                                  isSelected 
+                                    ? 'ring-2 ring-offset-2 ring-indigo-500 dark:ring-offset-gray-800 scale-110 z-10' 
+                                    : 'hover:scale-105 hover:ring-2 hover:ring-gray-300 dark:hover:ring-gray-600'
+                                }`}
+                                style={{ backgroundColor: `hsl(${v.h}, ${v.s}%, ${v.l}%)` }}
+                              />
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex gap-3">
-              <button onClick={() => setShowAddSubjectModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 dark:border-gray-600 dark:text-white">Zrušit</button>
-              <button onClick={handleSaveSubject} className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600">Uložit</button>
-            </div>
-          </div>
-        </div>
-      )}
+              <div className="flex gap-3">
+                <button onClick={() => setShowAddSubjectModal(false)} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 active:scale-95 transition-all duration-200 dark:border-gray-600 dark:text-white dark:hover:bg-gray-700">Zrušit</button>
+                <button onClick={handleSaveSubject} className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 shadow-sm hover:shadow active:scale-95 transition-all duration-200">Uložit</button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* MODAL: Upravit časy */}
-      {showEditTimesModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 max-h-[90vh] flex flex-col">
-            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Upravit časové bloky</h3>
+      <AnimatePresence>
+        {showEditTimesModal && (
+          <motion.div 
+            key="modal-backdrop-times"
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 max-h-[90vh] flex flex-col"
+            >
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Upravit časové bloky</h3>
 
-            <div className="flex gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
-              <button 
-                onClick={() => setTimeSlots(normalTimes)} 
-                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all border ${
-                  timeSlots.length === normalTimes.length && timeSlots[0] === normalTimes[0]
-                    ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm border-gray-200 dark:border-gray-500" 
-                    : "border-transparent text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-600/50"
-                }`}
-              >
-                Běžné (45m)
-              </button>
-              <button 
-                onClick={() => setTimeSlots(uniTimes)} 
-                className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all border ${
-                  timeSlots.length === uniTimes.length && timeSlots[0] === uniTimes[0]
-                    ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm border-gray-200 dark:border-gray-500" 
-                    : "border-transparent text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-600/50"
-                }`}
-              >
-                Vysoká (50m)
-              </button>
-            </div>
+              <div className="flex gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
+                <button 
+                  onClick={() => setTimeSlots(normalTimes)} 
+                  className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all border ${
+                    timeSlots.length === normalTimes.length && timeSlots[0] === normalTimes[0]
+                      ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm border-gray-200 dark:border-gray-500" 
+                      : "border-transparent text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-600/50"
+                  }`}
+                >
+                  Běžné (45m)
+                </button>
+                <button 
+                  onClick={() => setTimeSlots(uniTimes)} 
+                  className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all border ${
+                    timeSlots.length === uniTimes.length && timeSlots[0] === uniTimes[0]
+                      ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm border-gray-200 dark:border-gray-500" 
+                      : "border-transparent text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-600/50"
+                  }`}
+                >
+                  Vysoká (50m)
+                </button>
+              </div>
 
-            <div className="space-y-1 mb-4 overflow-y-auto flex-1 min-h-[300px] pr-2">
-              {timeSlots.map((slot, idx) => (
-                <DraggableTimeSlotItem 
-                  key={idx}
-                  index={idx}
-                  slot={slot}
-                  moveSlot={moveTimeSlot}
-                  updateSlot={(index, val) => {
-                    const newSlots = [...timeSlots];
-                    newSlots[index] = val;
-                    setTimeSlots(newSlots);
-                    syncWithSupabase(schedule, subjects, newSlots);
-                  }}
-                  deleteSlot={(index) => {
-                    const updated = timeSlots.filter((_, i) => i !== index);
-                    setTimeSlots(updated);
-                    syncWithSupabase(schedule, subjects, updated);
-                  }}
-                />
-              ))}
-            </div>
-            <button onClick={() => setTimeSlots([...timeSlots, "00:00 - 00:00"])} className="w-full py-2 mb-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-gray-50 dark:border-gray-600 dark:hover:bg-gray-700 transition-colors">
-              <Plus className="w-5 h-5 mx-auto" />
-            </button>
+              <div className="space-y-1 mb-4 overflow-y-auto flex-1 min-h-[300px] pr-2">
+                {timeSlots.map((slot, idx) => (
+                  <DraggableTimeSlotItem 
+                    key={idx}
+                    index={idx}
+                    slot={slot}
+                    moveSlot={moveTimeSlot}
+                    updateSlot={(index, val) => {
+                      const newSlots = [...timeSlots];
+                      newSlots[index] = val;
+                      setTimeSlots(newSlots);
+                      syncWithSupabase(schedule, subjects, newSlots);
+                    }}
+                    deleteSlot={(index) => {
+                      const updated = timeSlots.filter((_, i) => i !== index);
+                      setTimeSlots(updated);
+                      syncWithSupabase(schedule, subjects, updated);
+                    }}
+                  />
+                ))}
+              </div>
+              <button onClick={() => setTimeSlots([...timeSlots, "00:00 - 00:00"])} className="w-full py-2 mb-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-gray-100 active:scale-[0.98] transition-all duration-200 dark:border-gray-600 dark:hover:bg-gray-700">
+                <Plus className="w-5 h-5 mx-auto" />
+              </button>
               <button 
                 onClick={() => {
                   setShowEditTimesModal(false);
                   syncWithSupabase(schedule, subjects, timeSlots); // Uloží časy
                 }} 
-                className="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+                className="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 shadow-sm hover:shadow active:scale-[0.98] transition-all duration-200"
               >
                 Hotovo
               </button>
-          </div>
-        </div>
-      )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
+      {/* MODAL: Confirm Delete */}
+      <AnimatePresence>
+        {deletePrompt.isOpen && (
+          <motion.div 
+            key="modal-backdrop-delete"
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              className="bg-white dark:bg-gray-800 rounded-xl max-w-sm w-full p-6 text-center shadow-2xl"
+            >
+              <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center mx-auto mb-4">
+                <Trash2 className="w-6 h-6 text-red-600 dark:text-red-400" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                Potvrzení smazání
+              </h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                {deletePrompt.title}
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setDeletePrompt({ ...deletePrompt, isOpen: false })} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 active:scale-95 transition-all duration-200 dark:border-gray-600 dark:text-white dark:hover:bg-gray-700">
+                  Zrušit
+                </button>
+                <button onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-sm hover:shadow active:scale-95 transition-all duration-200">
+                  Smazat
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
 
     </div>
