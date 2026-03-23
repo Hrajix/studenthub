@@ -190,6 +190,10 @@ const TIME_SLOT_TYPE = "TIME_SLOT";
 
 function DraggableTimeSlotItem({ index, slot, moveSlot, updateSlot, deleteSlot }: any) {
   const ref = useRef<HTMLDivElement>(null);
+  
+  const [localVal, setLocalVal] = useState(slot);
+  useEffect(() => { setLocalVal(slot); }, [slot]);
+
   const [{ handlerId }, drop] = useDrop({
     accept: TIME_SLOT_TYPE,
     collect(monitor) { return { handlerId: monitor.getHandlerId() }; },
@@ -198,25 +202,63 @@ function DraggableTimeSlotItem({ index, slot, moveSlot, updateSlot, deleteSlot }
       const dragIndex = item.index;
       const hoverIndex = index;
       if (dragIndex === hoverIndex) return;
+
+      const hoverBoundingRect = ref.current.getBoundingClientRect();
+      const hoverMiddleY = (hoverBoundingRect.bottom - hoverBoundingRect.top) / 2;
+      const clientOffset = monitor.getClientOffset();
+      
+      if (!clientOffset) return;
+      const hoverClientY = clientOffset.y - hoverBoundingRect.top;
+
+      if (dragIndex < hoverIndex && hoverClientY < hoverMiddleY) return;
+      if (dragIndex > hoverIndex && hoverClientY > hoverMiddleY) return;
+
       moveSlot(dragIndex, hoverIndex);
       item.index = hoverIndex;
     },
   });
   
-  const [{ isDragging }, drag] = useDrag({
+  const [{ isDragging }, drag, dragPreview] = useDrag({
     type: TIME_SLOT_TYPE,
     item: () => ({ index }),
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   });
   
+  // VYLEPŠENÍ 1: Odstranění "ducha". Prohlížeč už nebude generovat ten ošklivý poloprůhledný screenshot.
+  useEffect(() => {
+    dragPreview(getEmptyImage(), { captureDraggingState: true });
+  }, [dragPreview]);
+
   drag(drop(ref));
 
   return (
-    <div ref={ref} data-handler-id={handlerId} className={`flex items-center gap-2 p-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mb-2 transition-opacity ${isDragging ? 'opacity-50' : 'opacity-100'}`}>
-      <GripVertical className="text-gray-400 cursor-grab active:cursor-grabbing w-5 h-5 shrink-0" />
-      <input type="text" value={slot} onChange={(e) => updateSlot(index, e.target.value)} className="flex-1 bg-transparent border-none focus:ring-0 p-1 text-sm text-gray-900 dark:text-white outline-none" />
-      <button onClick={() => deleteSlot(index)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"><Trash2 size={16}/></button>
-    </div>
+    <motion.div 
+      ref={ref} 
+      data-handler-id={handlerId}
+      layout="position" // OPRAVA 4: Bude plynule klouzat při prohazování, ale NEBUDE se prát s React DnD!
+      initial={{ opacity: 0, height: 0, marginBottom: 0, scale: 0.9 }}
+      animate={{ opacity: 1, height: "auto", marginBottom: 8, scale: 1 }}
+      exit={{ opacity: 0, height: 0, marginBottom: 0, scale: 0.9, overflow: "hidden" }}
+      transition={{ duration: 0.2 }}
+      className={`flex items-center gap-2 p-2 rounded-lg border transition-colors relative ${
+        isDragging 
+          ? 'bg-white dark:bg-gray-700 border-indigo-500 shadow-xl scale-[1.03] z-50 ring-2 ring-indigo-500/50' 
+          : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm z-0 hover:border-gray-300 dark:hover:border-gray-600'
+      }`}
+    >
+      <GripVertical className={`w-5 h-5 shrink-0 transition-colors ${isDragging ? 'text-indigo-500 cursor-grabbing' : 'text-gray-400 cursor-grab hover:text-gray-600'}`} />
+      <input 
+        type="text" 
+        value={localVal} 
+        onChange={(e) => setLocalVal(e.target.value)} 
+        onBlur={() => { if (localVal !== slot) updateSlot(index, localVal); }}
+        onKeyDown={(e) => { if (e.key === 'Enter') updateSlot(index, localVal); }}
+        className={`flex-1 bg-transparent border-none focus:ring-0 p-1 text-sm font-medium outline-none ${isDragging ? 'text-indigo-700 dark:text-indigo-300 pointer-events-none' : 'text-gray-900 dark:text-white'}`} 
+      />
+      <button onClick={() => deleteSlot(index)} className={`p-1.5 rounded transition-colors ${isDragging ? 'text-gray-300 pointer-events-none' : 'text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20'}`}>
+        <Trash2 size={16}/>
+      </button>
+    </motion.div>
   );
 }
 
@@ -904,6 +946,7 @@ function ScheduleContent() {
             className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
           >
             <motion.div 
+              layout
               initial={{ opacity: 0, scale: 0.95, y: 10 }} 
               animate={{ opacity: 1, scale: 1, y: 0 }} 
               exit={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -912,51 +955,65 @@ function ScheduleContent() {
             >
               <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Upravit časové bloky</h3>
 
-              <div className="flex gap-2 mb-6 p-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg">
-                <button 
-                  onClick={() => setTimeSlots(normalTimes)} 
-                  className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all border ${
-                    timeSlots.length === normalTimes.length && timeSlots[0] === normalTimes[0]
-                      ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm border-gray-200 dark:border-gray-500" 
-                      : "border-transparent text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-600/50"
-                  }`}
-                >
-                  Běžné (45m)
-                </button>
-                <button 
-                  onClick={() => setTimeSlots(uniTimes)} 
-                  className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all border ${
-                    timeSlots.length === uniTimes.length && timeSlots[0] === uniTimes[0]
-                      ? "bg-white dark:bg-gray-600 text-gray-900 dark:text-white shadow-sm border-gray-200 dark:border-gray-500" 
-                      : "border-transparent text-gray-600 dark:text-gray-300 hover:bg-white/50 dark:hover:bg-gray-600/50"
-                  }`}
-                >
-                  Vysoká (50m)
-                </button>
+             {/* Animovaný přepínač typu časů */}
+              <div className="relative flex gap-1 mb-6 p-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                {[
+                  { id: 'normal', label: 'Běžné (45m)', data: normalTimes },
+                  { id: 'uni', label: 'Vysoká (50m)', data: uniTimes }
+                ].map((type) => {
+                  const isActive = timeSlots.length === type.data.length && timeSlots[0] === type.data[0];
+                  return (
+                    <button
+                      key={type.id}
+                      onClick={() => setTimeSlots(type.data)}
+                      className={`relative flex-1 py-1.5 text-sm font-medium rounded-md transition-colors z-10 ${isActive ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"}`}
+                    >
+                      {isActive && (
+                        <motion.div layoutId="timeTypePill" className="absolute inset-0 bg-white dark:bg-gray-600 rounded-md shadow-sm border border-gray-200 dark:border-gray-500" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+                      )}
+                      <span className="relative z-20">{type.label}</span>
+                    </button>
+                  )
+                })}
               </div>
 
-              <div className="space-y-1 mb-4 overflow-y-auto flex-1 min-h-[300px] pr-2">
-                {timeSlots.map((slot, idx) => (
-                  <DraggableTimeSlotItem 
-                    key={idx}
-                    index={idx}
-                    slot={slot}
-                    moveSlot={moveTimeSlot}
-                    updateSlot={(index, val) => {
-                      const newSlots = [...timeSlots];
-                      newSlots[index] = val;
-                      setTimeSlots(newSlots);
-                      syncWithSupabase(schedule, subjects, newSlots);
-                    }}
-                    deleteSlot={(index) => {
-                      const updated = timeSlots.filter((_, i) => i !== index);
-                      setTimeSlots(updated);
-                      syncWithSupabase(schedule, subjects, updated);
-                    }}
-                  />
-                ))}
+              {/* Seznam samotných časů s animacemi */}
+              {/* Seznam samotných časů s animacemi */}
+              <div className="mb-4 overflow-y-auto flex-1 min-h-[300px] pr-2 overflow-x-hidden">
+                {/* OPRAVA 1: Smazáno obalovací div, které dělalo double-height glitch. */}
+                <AnimatePresence initial={false}>
+                  {timeSlots.map((slot, idx) => (
+                    <DraggableTimeSlotItem 
+                      // OPRAVA 2: Zásadní! Klíč už NENÍ index. 
+                      // Díky tomu bude ten grafický efekt "držení" skutečně cestovat s položkou dolů!
+                      key={slot} 
+                      index={idx}
+                      slot={slot}
+                      moveSlot={moveTimeSlot}
+                      updateSlot={(index, val) => {
+                        const newSlots = [...timeSlots];
+                        newSlots[index] = val;
+                        setTimeSlots(newSlots);
+                        syncWithSupabase(schedule, subjects, newSlots);
+                      }}
+                      deleteSlot={(index) => {
+                        const updated = timeSlots.filter((_, i) => i !== index);
+                        setTimeSlots(updated);
+                        syncWithSupabase(schedule, subjects, updated);
+                      }}
+                    />
+                  ))}
+                </AnimatePresence>
               </div>
-              <button onClick={() => setTimeSlots([...timeSlots, "00:00 - 00:00"])} className="w-full py-2 mb-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-gray-100 active:scale-[0.98] transition-all duration-200 dark:border-gray-600 dark:hover:bg-gray-700">
+              <button 
+                // OPRAVA 3: Pojistka, aby se nezbláznily klíče, když klikneš víckrát na "+"
+                onClick={() => {
+                  const base = "00:00 - 00:00";
+                  const count = timeSlots.filter(s => s.startsWith(base)).length;
+                  setTimeSlots([...timeSlots, count > 0 ? `${base} (${count})` : base]);
+                }} 
+                className="w-full py-2 mb-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-gray-100 active:scale-[0.98] transition-all duration-200 dark:border-gray-600 dark:hover:bg-gray-700"
+              >
                 <Plus className="w-5 h-5 mx-auto" />
               </button>
               <button 
