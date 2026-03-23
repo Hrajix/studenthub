@@ -73,19 +73,22 @@ function DraggableClass({ classData, abbr, isDense, onClick, onEdit, onDelete, o
     type: ItemType,
     item: { ...classData },
     end: () => onDragEnd(),
-    collect: (monitor) => ({ isDragging: monitor.isDragging() }),
+    collect: (monitor) => ({ 
+      // Místo lokálního stavu se ptáme globálně: "Je tažená hodina, co má moje ID?"
+      isDragging: monitor.getItemType() === ItemType && monitor.getItem()?.id === classData.id 
+    }),
   });
 
   useEffect(() => {
     dragPreview(getEmptyImage(), { captureDraggingState: true });
   }, [dragPreview]);
 
-  const animationConfig = { type: "spring", stiffness: 350, damping: 25 };
+  const animationConfig = isDragging 
+    ? { type: "spring", stiffness: 500, damping: 30 } 
+    : { type: "spring", stiffness: 300, damping: 20 };
 
   const isSolid = classData.type === "Přednáška" || classData.type === "Běžný";
   const isCompact = isDense && classData.duration === 1;
-  
-  // OPRAVA 1: Snížen limit na 15 znaků, aby Python s 25 znaky ZARUČENĚ prošel a smrsknul se!
   const isLongText = classData.subject.length > 13;
   const shouldShrink = isCompact && isLongText;
   
@@ -97,8 +100,7 @@ function DraggableClass({ classData, abbr, isDense, onClick, onEdit, onDelete, o
   const border = isSolid ? "none" : `2px solid hsl(${h}, ${s}%, ${l}%)`;
 
   return (
-    // OPRAVA 2: pointer-events-none během tažení! Díky tomu hodina neblokuje myš a můžeš ji přesunout i o pouhé 1 políčko.
-    <div ref={drag} className={`w-full h-full select-none cursor-grab group ${isDragging ? "pointer-events-auto" : "pointer-events-auto"}`}>
+    <div ref={drag} className={`w-full h-full select-none cursor-grab group ${isDragging ? "pointer-events-none" : "pointer-events-auto"}`}>
       <motion.div
         onClick={onClick}
         style={{ backgroundColor: bg, color: textCol, border }}
@@ -106,7 +108,8 @@ function DraggableClass({ classData, abbr, isDense, onClick, onEdit, onDelete, o
         transition={animationConfig}
         className={`relative rounded-lg ${shouldShrink ? 'p-1.5' : 'p-2'} h-full flex flex-col justify-between ${
           isDragging 
-            ? "is-dragging scale-[1.03] rotate-1 shadow-2xl ring-4 ring-indigo-400/50 opacity-90 z-50" 
+            // OPRAVA 1: Smazáno "opacity-90", barva už se při přesunu nikdy opticky nezmění
+            ? "is-dragging scale-[1.05] rotate-1 shadow-2xl ring-4 ring-indigo-400/50 z-50" 
             : "shadow-sm hover:shadow-md transition-shadow"
         }`}
       >
@@ -196,10 +199,40 @@ function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, checkC
     hover: (item: any, monitor) => {
       if (monitor.getItemType() === "CLASS") {
         if (item.day === day && item.timeSlot === timeSlot) return; 
+        
+        // 1. Zkusíme klasický přesun přesně na políčko, nad kterým právě teď zastavila myš
         if (checkCollision(item.id, day, timeSlot, item.duration)) {
            onHoverClass(item.id, day, timeSlot);
            item.day = day;
            item.timeSlot = timeSlot;
+           return;
+        }
+
+        // 2. ZÁCHRANA PRO RYCHLÉ ŠVIHNUTÍ: 
+        // Pokud myš přeskočila políčka příliš rychle a cíl je zablokovaný,
+        // zkontrolujeme políčka mezi startem a cílem a posuneme hodinu "co nejdál to jde".
+        if (item.day === day) {
+          if (timeSlot > item.timeSlot) {
+            // Švihnutí doprava
+            for (let s = timeSlot - 1; s > item.timeSlot; s--) {
+              if (checkCollision(item.id, day, s, item.duration)) {
+                onHoverClass(item.id, day, s);
+                item.day = day;
+                item.timeSlot = s;
+                return;
+              }
+            }
+          } else if (timeSlot < item.timeSlot) {
+            // Švihnutí doleva
+            for (let s = timeSlot + 1; s < item.timeSlot; s++) {
+              if (checkCollision(item.id, day, s, item.duration)) {
+                onHoverClass(item.id, day, s);
+                item.day = day;
+                item.timeSlot = s;
+                return;
+              }
+            }
+          }
         }
       }
     },
@@ -219,8 +252,9 @@ function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, checkC
     <div
       ref={drop}
       onClick={() => { if (!classData) onEmptyClick(day, timeSlot); }}
-      // OPRAVA 3: Pokud tu je hodina, skryjeme okraje a bílé pozadí samotné mřížky. Barevná karta ji tak dokonale vyplní.
-      className={`min-h-[72px] min-w-0 rounded-lg transition-colors relative group cursor-pointer ${
+      // Zásadní: Hodina se vrací do gridu a fyzicky se roztáhne přes víc sloupců
+      style={{ gridColumn: colSpan > 1 ? `span ${colSpan}` : undefined }}
+      className={`min-h-[72px] min-w-0 rounded-lg transition-colors relative group cursor-pointer h-full ${
         isSubjectHighlight 
           ? "bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-300 dark:border-indigo-600" 
           : (classData 
@@ -228,18 +262,16 @@ function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, checkC
               : "bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700")
       } ${classData ? 'z-10' : 'z-0'} has-[.is-dragging]:z-50`}
     >
-      {classData && (
-        <div 
-          className="absolute inset-y-0 left-0 z-20"
-          style={{ width: `calc(${colSpan * 100}% + ${(colSpan - 1) * 6}px)` }} 
-        >
+      {classData ? (
+        // Vyhozeno "absolute inset-y-0", karta je teď normálně v dokumentu a může natahovat výšku řádku!
+        <div className="w-full h-full z-20">
           <DraggableClass classData={classData} abbr={abbr} isDense={isDense} onClick={onClassClick} onEdit={onEditClass} onDelete={onDeleteClass} onDragEnd={onDragEndClass} />
         </div>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-0">
+          <Plus className="w-5 h-5 text-gray-300 dark:text-gray-600" />
+        </div>
       )}
-      
-      <div className={`absolute inset-0 flex items-center justify-center transition-opacity z-0 ${classData ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'}`}>
-        <Plus className="w-5 h-5 text-gray-300 dark:text-gray-600" />
-      </div>
     </div>
   );
 }
@@ -530,11 +562,15 @@ function ScheduleContent() {
                 </div>
                 {(() => {
                   const rowSlots = [];
+                  let skipUntil = 0;
                   
-                  // Vyhodili jsme přeskakování (skipUntil), tvoříme pozadí z 1x1 buněk vždy
+                  // Návrat k původnímu: když má hodina 2 bloky, fyzicky zabere místo a další políčko přeskočíme
                   for (let timeIndex = 0; timeIndex < timeSlots.length; timeIndex++) {
+                    if (timeIndex < skipUntil) continue;
+                    
                     const cls = getClassForSlot(dayIndex, timeIndex);
                     const colSpan = cls?.duration || 1;
+                    skipUntil = timeIndex + colSpan;
                     
                     rowSlots.push(
                       <TimeSlot
