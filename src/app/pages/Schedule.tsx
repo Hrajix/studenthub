@@ -63,6 +63,7 @@ interface DraggableClassProps {
   abbr: string;
   isDense?: boolean;
   isDeleting?: boolean;
+  isEditing?: boolean;
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -72,35 +73,26 @@ interface DraggableClassProps {
 
 const seenClassIds = new Set<string>();
 
-function DraggableClass({ classData, abbr, isDense, isDeleting, onClick, onEdit, onDelete, onDragEnd }: DraggableClassProps) {
+function DraggableClass({ classData, abbr, isDense, isDeleting, isEditing, onClick, onEdit, onDelete, onDragEnd }: DraggableClassProps) {
   const isNewRef = useRef(!seenClassIds.has(classData.id));
-  useEffect(() => {
-    seenClassIds.add(classData.id);
-  }, [classData.id]);
+  useEffect(() => { seenClassIds.add(classData.id); }, [classData.id]);
 
   const [{ isDragging }, drag, dragPreview] = useDrag({
     type: ItemType,
     item: { ...classData },
+    canDrag: isEditing, // ZAMYKÁNÍ DRAGU
     end: () => onDragEnd(),
     collect: (monitor) => ({ 
-      // Místo lokálního stavu se ptáme globálně: "Je tažená hodina, co má moje ID?"
       isDragging: monitor.getItemType() === ItemType && monitor.getItem()?.id === classData.id 
     }),
   });
 
-  useEffect(() => {
-    dragPreview(getEmptyImage(), { captureDraggingState: true });
-  }, [dragPreview]);
+  useEffect(() => { dragPreview(getEmptyImage(), { captureDraggingState: true }); }, [dragPreview]);
 
-  const animationConfig = isDragging 
-    ? { type: "spring", stiffness: 500, damping: 30 } 
-    : { type: "spring", stiffness: 300, damping: 20 };
-
+  const animationConfig = isDragging ? { type: "spring", stiffness: 500, damping: 30 } : { type: "spring", stiffness: 300, damping: 20 };
   const isSolid = classData.type === "Přednáška" || classData.type === "Běžný";
   const isCompact = isDense && classData.duration === 1;
-  const isLongText = classData.subject.length > 13;
-  const shouldShrink = isCompact && isLongText;
-  
+  const shouldShrink = isCompact && classData.subject.length > 13;
   const { h, s, l } = classData.color;
   const isLight = l > 60 || (h > 35 && h < 100 && l > 40);
   
@@ -109,7 +101,7 @@ function DraggableClass({ classData, abbr, isDense, isDeleting, onClick, onEdit,
   const border = isSolid ? "none" : `2px solid hsl(${h}, ${s}%, ${l}%)`;
 
   return (
-    <div ref={drag} className={`w-full h-full select-none cursor-grab group ${isDragging ? "pointer-events-none" : "pointer-events-auto"}`}>
+    <div ref={drag} className={`w-full h-full select-none ${isEditing ? 'cursor-grab' : 'cursor-pointer'} ${isDragging ? "pointer-events-none" : "pointer-events-auto"}`}>
       <motion.div
         onClick={onClick}
         style={{ backgroundColor: bg, color: textCol, border }}
@@ -119,21 +111,30 @@ function DraggableClass({ classData, abbr, isDense, isDeleting, onClick, onEdit,
         transition={animationConfig}
         className={`relative rounded-lg ${shouldShrink ? 'p-1.5' : 'p-2'} h-full flex flex-col justify-between ${
           isDragging 
-            // OPRAVA 1: Smazáno "opacity-90", barva už se při přesunu nikdy opticky nezmění
             ? "is-dragging scale-[1.05] rotate-1 shadow-2xl ring-4 ring-indigo-400/50 z-[999]" 
-            : "shadow-sm hover:shadow-md transition-shadow"
+            // KRÁSNÝ HOVER EFEKT V READ-ONLY MÓDU:
+            : (isEditing ? "shadow-sm" : "shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-200")
         }`}
       >
-        {/* Plovoucí bublina s akcemi - Plynulá animace */}
-        <div className="absolute -top-2 -right-2 flex gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-md rounded-lg p-0.5 z-20 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto translate-y-1 group-hover:translate-y-0 transition-all duration-200 ease-out">
-          <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition-colors"><Edit size={12} /></button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded transition-colors"><Trash2 size={12} /></button>
-        </div>
+        {/* Plovoucí bublina s akcemi - Animovaný pop-up, zobrazí se jen v Edit módu */}
+        <AnimatePresence initial={false}>
+          {isEditing && (
+            <motion.div 
+              key="class-edit-popup"
+              initial={{ opacity: 0, scale: 0.5, x: -10, y: 10 }}
+              animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+              exit={{ opacity: 0, scale: 0.5, x: -10, y: 10 }}
+              transition={{ type: "spring", stiffness: 500, damping: 25, delay: 0.05 }}
+              className="absolute -top-2.5 -right-2.5 flex gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-full p-1 z-30 transition-shadow hover:ring-indigo-300"
+            >
+              <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full transition-colors"><Edit size={12} /></button>
+              <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-full transition-colors"><Trash2 size={12} /></button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <div className="min-h-0">
-          <div className={`font-bold ${shouldShrink ? 'text-[10px] line-clamp-3' : 'text-[12px] line-clamp-2'} leading-tight mb-0.5`} title={classData.subject}>
-            {classData.subject}
-          </div>
+          <div className={`font-bold ${shouldShrink ? 'text-[10px] line-clamp-3' : 'text-[12px] line-clamp-2'} leading-tight mb-0.5`} title={classData.subject}>{classData.subject}</div>
           <div className={`${shouldShrink ? 'text-[9px]' : 'text-[11px]'} truncate opacity-90`}>{classData.teacher}</div>
         </div>
         
@@ -153,10 +154,11 @@ function DraggableClass({ classData, abbr, isDense, isDeleting, onClick, onEdit,
   );
 }
 
-function DraggableSubject({ subject, data, onEdit, onDelete }: { subject: string; data: SubjectData; onEdit: () => void; onDelete: () => void }) {
+function DraggableSubject({ subject, data, isEditing, onEdit, onDelete }: { subject: string; data: SubjectData; isEditing: boolean; onEdit: () => void; onDelete: () => void }) {
   const [{ isDragging }, drag] = useDrag({
     type: "SUBJECT",
     item: { subject, color: data.color },
+    canDrag: isEditing,
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   });
 
@@ -168,7 +170,7 @@ function DraggableSubject({ subject, data, onEdit, onDelete }: { subject: string
       exit={{ opacity: 0, scale: 0.8 }}
       transition={{ duration: 0.15 }}
       ref={drag as any}
-      className={`select-none group relative flex items-center gap-2 cursor-grab active:cursor-grabbing p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-100 dark:border-gray-700 ${
+      className={`select-none relative flex items-center gap-2 ${isEditing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-100 dark:border-gray-700 ${
         isDragging ? "opacity-50" : "opacity-100"
       }`}
     >
@@ -178,10 +180,21 @@ function DraggableSubject({ subject, data, onEdit, onDelete }: { subject: string
         <span className="text-[10px] text-gray-500 font-mono">{data.abbr}</span>
       </div>
       
-      <div className="absolute -top-3 -right-2 flex items-center gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-md px-1 py-0.5 rounded-lg z-20 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto translate-y-1 group-hover:translate-y-0 transition-all duration-200 ease-out">        
-        <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded"><Edit size={14} /></button>
-        <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded"><Trash2 size={14} /></button>
-      </div>
+      <AnimatePresence initial={false}>
+        {isEditing && (
+          <motion.div 
+            key="subject-edit-popup"
+            initial={{ opacity: 0, scale: 0.5, x: -10, y: 10 }}
+            animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
+            exit={{ opacity: 0, scale: 0.5, x: -10, y: 10 }}
+            transition={{ type: "spring", stiffness: 500, damping: 25, delay: 0.02 }}
+            className="absolute -top-3.5 -right-2 flex items-center gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 shadow-xl px-1.5 py-0.5 rounded-full z-30 transition-shadow hover:ring-indigo-300"
+          >        
+            <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors rounded-full"><Edit size={14} /></button>
+            <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors rounded-full"><Trash2 size={14} /></button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -224,7 +237,6 @@ function DraggableTimeSlotItem({ index, slot, moveSlot, updateSlot, deleteSlot }
     collect: (monitor) => ({ isDragging: monitor.isDragging() }),
   });
   
-  // VYLEPŠENÍ 1: Odstranění "ducha". Prohlížeč už nebude generovat ten ošklivý poloprůhledný screenshot.
   useEffect(() => {
     dragPreview(getEmptyImage(), { captureDraggingState: true });
   }, [dragPreview]);
@@ -235,7 +247,7 @@ function DraggableTimeSlotItem({ index, slot, moveSlot, updateSlot, deleteSlot }
     <motion.div 
       ref={ref} 
       data-handler-id={handlerId}
-      layout="position" // OPRAVA 4: Bude plynule klouzat při prohazování, ale NEBUDE se prát s React DnD!
+      layout="position" 
       initial={{ opacity: 0, height: 0, marginBottom: 0, scale: 0.9 }}
       animate={{ opacity: 1, height: "auto", marginBottom: 8, scale: 1 }}
       exit={{ opacity: 0, height: 0, marginBottom: 0, scale: 0.9, overflow: "hidden" }}
@@ -270,6 +282,7 @@ interface TimeSlotProps {
   colSpan?: number;
   isDense?: boolean;
   isDeleting?: boolean;
+  isEditing?: boolean;
   checkCollision: (classId: string | null, day: number, timeSlot: number, duration: number) => boolean;
   onHoverClass: (id: string, day: number, timeSlot: number) => void;
   onDragEndClass: () => void;
@@ -280,11 +293,12 @@ interface TimeSlotProps {
   onDeleteClass: () => void;
 }
 
-function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, isDeleting, checkCollision, onHoverClass, onDragEndClass, onDropSubject, onEmptyClick, onClassClick, onEditClass, onDeleteClass }: TimeSlotProps) {
+function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, isDeleting, isEditing, checkCollision, onHoverClass, onDragEndClass, onDropSubject, onEmptyClick, onClassClick, onEditClass, onDeleteClass }: TimeSlotProps) {
   const [{ isOver, canDrop, itemType }, drop] = useDrop({
     accept: ["CLASS", "SUBJECT"],
     dropEffect: "move",
     canDrop: (item: any, monitor) => {
+      if (!isEditing) return false; // ZAMYKÁNÍ DROP-ZONE
       if (monitor.getItemType() === "SUBJECT") return checkCollision(null, day, timeSlot, 1);
       if (monitor.getItemType() === "CLASS") return checkCollision(item.id, day, timeSlot, item.duration);
       return false;
@@ -344,8 +358,10 @@ function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, isDele
   return (
     <div
       ref={drop as any}
-      onClick={() => { if (!classData) onEmptyClick(day, timeSlot); }}
-      className={`min-h-[72px] min-w-0 rounded-lg transition duration-200 relative group cursor-pointer h-full ${
+      onClick={() => { if (!classData && isEditing) onEmptyClick(day, timeSlot); }}
+      className={`min-h-[72px] min-w-0 rounded-lg transition duration-200 relative group h-full ${
+        isEditing && !classData ? 'cursor-pointer' : ''
+      } ${
         isSubjectHighlight 
           ? "bg-indigo-50 dark:bg-indigo-900/30 border-2 border-dashed border-indigo-400 dark:border-indigo-500 scale-[0.96]" 
           : (classData 
@@ -354,17 +370,24 @@ function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, isDele
       } ${classData ? 'z-10' : 'z-0'} has-[.is-dragging]:z-[999]`}
     >
       {classData ? (
-        <div 
-          className="relative z-20 h-full"
-          style={{ width: `calc(${colSpan * 100}% + ${(colSpan - 1) * 8}px)` }}
-        >
-          <DraggableClass classData={classData} abbr={abbr} isDense={isDense} isDeleting={isDeleting} onClick={onClassClick} onEdit={onEditClass} onDelete={onDeleteClass} onDragEnd={onDragEndClass} />
+        <div className="relative z-20 h-full" style={{ width: `calc(${colSpan * 100}% + ${(colSpan - 1) * 8}px)` }}>
+          <DraggableClass classData={classData} abbr={abbr} isDense={isDense} isDeleting={isDeleting} isEditing={isEditing} onClick={onClassClick} onEdit={onEditClass} onDelete={onDeleteClass} onDragEnd={onDragEndClass} />
         </div>
       ) : (
-        // VYLEPŠENÍ: Ikonka plus se při hoveru předmětem rozsvítí modře
-        <div className={`absolute inset-0 flex items-center justify-center transition-opacity z-0 pointer-events-none ${isSubjectHighlight ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
-          <Plus className={`w-5 h-5 transition-colors ${isSubjectHighlight ? 'text-indigo-500' : 'text-gray-300 dark:text-gray-600'}`} />
-        </div>
+        // PLUSKA SE UKÁŽOU JEN V EDIT MÓDU
+        <AnimatePresence>
+          {isEditing && (
+            <motion.div 
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, transition: { duration: 0.2 } }}
+              transition={{ duration: 0.2 }}
+              className={`absolute inset-0 flex items-center justify-center z-0 pointer-events-none ${isSubjectHighlight ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}
+            >
+              <Plus className={`w-5 h-5 transition-colors ${isSubjectHighlight ? 'text-indigo-500' : 'text-gray-300 dark:text-gray-600'}`} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       )}
     </div>
   );
@@ -373,6 +396,7 @@ function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, isDele
 function ScheduleContent() {
   const navigate = useNavigate();
   const [isOddWeek, setIsOddWeek] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
 
   // --- STAVY PRO DYNAMICKÉ ČASOVÉ SLOTY ---
   const [timeSlots, setTimeSlots] = useState<string[]>(normalTimes); // <-- Zde upraveno na normalTimes!
@@ -669,12 +693,40 @@ function ScheduleContent() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Rozvrh hodin</h1>
-          <p className="text-gray-600 dark:text-gray-400">Přetáhněte předměty pro úpravu rozvrhu</p>
+          <p className="text-gray-600 dark:text-gray-400">
+            {isEditing ? "Upravte svůj rozvrh přetažením prvků" : "Kliknutím na hodinu zobrazíte detaily"}
+          </p>
         </div>
-        <button onClick={() => setShowEditTimesModal(true)} className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm">
-          <Settings2 size={16} />
-          Upravit časy
-        </button>
+        <div className="flex gap-3">
+          {/* VYLEPŠENÍ: AnimatePresence pro tlačítko v hlavičce */}
+          <AnimatePresence>
+            {isEditing && (
+              <motion.button 
+                // Animujeme zprava doleva, fade in/out
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20, transition: { duration: 0.15 } }}
+                transition={{ duration: 0.2 }}
+                onClick={() => setShowEditTimesModal(true)} 
+                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm"
+              >
+                <Settings2 size={16} />
+                Upravit časy
+              </motion.button>
+            )}
+          </AnimatePresence>
+          <button
+            onClick={() => setIsEditing(!isEditing)}
+            // Přidáme layout, aby se ostatní tlačítka plynule posunula, když se zjeví "Hotovo"
+            className={`flex items-center gap-2 px-5 py-2 rounded-lg font-medium transition-all shadow-sm active:scale-95 ${
+              isEditing 
+                ? "bg-indigo-500 text-white hover:bg-indigo-600 hover:shadow" 
+                : "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-700"
+            }`}
+          >
+            {isEditing ? "Hotovo" : "Upravit rozvrh"}
+          </button>
+        </div>
       </div>
 
       {/* Schedule Grid */}
@@ -718,6 +770,7 @@ function ScheduleContent() {
                         colSpan={colSpan}
                         isDense={isDense}
                         isDeleting={cls ? deletingClassIds.includes(cls.id) : false}
+                        isEditing={isEditing}
                         classData={cls}
                         abbr={cls ? (subjects[cls.subject]?.abbr || "") : ""}
                         checkCollision={checkCollision}
@@ -741,16 +794,29 @@ function ScheduleContent() {
 
       {/* Legend */}
       <div className="mt-6 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 h-10"> {/* Pevná výška h-10 pro stabilní layout při animaci */}
           <h3 className="font-semibold text-gray-900 dark:text-white">Předměty</h3>
-          <button onClick={openNewSubjectModal} className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors">
-            <Plus className="w-5 h-5" /> Přidat předmět
-          </button>
+          {/* VYLEPŠENÍ: AnimatePresence pro tlačítko v legendě */}
+          <AnimatePresence>
+            {isEditing && (
+              <motion.button 
+                // Animujeme zprava doleva, fade in/out
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20, transition: { duration: 0.15 } }}
+                transition={{ duration: 0.2 }}
+                onClick={openNewSubjectModal} 
+                className="flex items-center gap-1 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors"
+              >
+                <Plus className="w-5 h-5" /> Přidat předmět
+              </motion.button>
+            )}
+          </AnimatePresence>
         </div>
         <div className="flex flex-wrap gap-3">
           <AnimatePresence>
             {Object.entries(subjects).map(([subj, data]) => (
-              <DraggableSubject key={subj} subject={subj} data={data} onEdit={() => handleEditSubject(subj)} onDelete={() => handleDeleteSubject(subj)} />
+              <DraggableSubject key={subj} subject={subj} data={data} isEditing={isEditing} onEdit={() => handleEditSubject(subj)} onDelete={() => handleDeleteSubject(subj)} />
             ))}
           </AnimatePresence>
         </div>
