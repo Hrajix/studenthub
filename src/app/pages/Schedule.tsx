@@ -242,7 +242,7 @@ function DraggableTimeSlotItem({ index, slot, moveSlot, updateSlot, deleteSlot }
       transition={{ duration: 0.2 }}
       className={`flex items-center gap-2 p-2 rounded-lg border transition-colors relative ${
         isDragging 
-          ? 'bg-white dark:bg-gray-700 border-indigo-500 shadow-xl scale-[1.03] z-50 ring-2 ring-indigo-500/50' 
+          ? 'bg-white dark:bg-gray-700 border-indigo-500 shadow-xl scale-[0.98] z-50 ring-2 ring-indigo-500/50' 
           : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm z-0 hover:border-gray-300 dark:hover:border-gray-600'
       }`}
     >
@@ -356,7 +356,7 @@ function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, isDele
       {classData ? (
         <div 
           className="relative z-20 h-full"
-          style={{ width: `calc(${colSpan * 100}% + ${(colSpan - 1) * 6}px)` }}
+          style={{ width: `calc(${colSpan * 100}% + ${(colSpan - 1) * 8}px)` }}
         >
           <DraggableClass classData={classData} abbr={abbr} isDense={isDense} isDeleting={isDeleting} onClick={onClassClick} onEdit={onEditClass} onDelete={onDeleteClass} onDragEnd={onDragEndClass} />
         </div>
