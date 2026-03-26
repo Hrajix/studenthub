@@ -3,7 +3,7 @@ import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend, getEmptyImage } from "react-dnd-html5-backend"; // Nové: getEmptyImage
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Edit, Trash2, GripVertical, Settings2 } from "lucide-react";
+import { Plus, Edit, Trash2, GripVertical, Settings2, Share2, Copy, Download, AlertTriangle } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
 const ItemType = "CLASS";
@@ -399,8 +399,16 @@ function ScheduleContent() {
   const [isEditing, setIsEditing] = useState(false);
 
   // --- STAVY PRO DYNAMICKÉ ČASOVÉ SLOTY ---
-  const [timeSlots, setTimeSlots] = useState<string[]>(normalTimes); // <-- Zde upraveno na normalTimes!
+  const [timeMode, setTimeMode] = useState<'normal' | 'uni'>('normal');
+  const [customNormalTimes, setCustomNormalTimes] = useState<string[]>(normalTimes);
+  const [customUniTimes, setCustomUniTimes] = useState<string[]>(uniTimes);
+  const [timeSlots, setTimeSlots] = useState<string[]>(normalTimes);
   const [showEditTimesModal, setShowEditTimesModal] = useState(false);
+
+  useEffect(() => {
+    if (timeMode === 'normal') setCustomNormalTimes(timeSlots);
+    else setCustomUniTimes(timeSlots);
+  }, [timeSlots, timeMode]);
 
   // Funkce pro Drag & Drop v modálu s časy
   const moveTimeSlot = useCallback((dragIndex: number, hoverIndex: number) => {
@@ -428,6 +436,57 @@ function ScheduleContent() {
   // Pomocná reference pro jistotu, že funkce vždy vidí poslední data
   const scheduleRef = useRef(schedule);
   useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
+
+  // --- STAVY PRO IMPORT/EXPORT ROZVRHU ---
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [importCode, setImportCode] = useState("");
+  const [copySuccess, setCopySuccess] = useState(false);
+  const [showConfirmImportModal, setShowConfirmImportModal] = useState(false); // NOVÝ STAV
+  const [pendingImportData, setPendingImportData] = useState<any>(null); // DOČASNÁ PAMĚŤ
+
+  const getExportCode = () => {
+    return btoa(encodeURIComponent(JSON.stringify({ schedule, subjects, timeSlots, customNormalTimes, customUniTimes, timeMode })));
+  };
+
+  const handleImportAttempt = () => {
+    if (!importCode.trim()) return;
+    try {
+      const decoded = JSON.parse(decodeURIComponent(atob(importCode)));
+      if (decoded && decoded.schedule && decoded.subjects) {
+        // Místo obyčejného alertu si data uložíme a otevřeme custom confirm
+        setPendingImportData(decoded);
+        setShowConfirmImportModal(true);
+      } else {
+        alert("Neplatný kód rozvrhu.");
+      }
+    } catch (err) {
+      alert("Neplatný kód rozvrhu. Zkontrolujte, zda jste jej zkopírovali celý.");
+    }
+  };
+
+  const finalizeImport = () => {
+    if (!pendingImportData) return;
+    const { schedule: newSchedule, subjects: newSubjects, timeSlots: newSlots, customNormalTimes: cN, customUniTimes: cU, timeMode: tM } = pendingImportData;
+    
+    setSchedule(newSchedule);
+    setSubjects(newSubjects);
+    if (newSlots) setTimeSlots(newSlots);
+    if (cN) setCustomNormalTimes(cN);
+    if (cU) setCustomUniTimes(cU);
+    if (tM) setTimeMode(tM);
+    
+    syncWithSupabase(newSchedule, newSubjects, newSlots);
+    setShowShareModal(false);
+    setShowConfirmImportModal(false);
+    setPendingImportData(null);
+    setImportCode("");
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(getExportCode());
+    setCopySuccess(true);
+    setTimeout(() => setCopySuccess(false), 2000);
+  };
   
   const totalDuration = schedule.reduce((acc, c) => acc + c.duration, 0);
   const longClassesDuration = schedule.filter(c => c.duration > 1).reduce((acc, c) => acc + c.duration, 0);
@@ -698,21 +757,36 @@ function ScheduleContent() {
           </p>
         </div>
         <div className="flex gap-3">
-          {/* VYLEPŠENÍ: AnimatePresence pro tlačítko v hlavičce */}
+          {/* VYLEPŠENÍ: AnimatePresence pro tlačítka v hlavičce */}
           <AnimatePresence>
             {isEditing && (
-              <motion.button 
-                // Animujeme zprava doleva, fade in/out
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: 20, transition: { duration: 0.15 } }}
-                transition={{ duration: 0.2 }}
-                onClick={() => setShowEditTimesModal(true)} 
-                className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm"
-              >
-                <Settings2 size={16} />
-                Upravit časy
-              </motion.button>
+              <>
+                <motion.button 
+                  key="btn-share"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20, transition: { duration: 0.15 } }}
+                  transition={{ duration: 0.2, delay: 0.05 }}
+                  onClick={() => setShowShareModal(true)} 
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors text-sm font-medium shadow-sm"
+                >
+                  <Share2 size={16} />
+                  Sdílet
+                </motion.button>
+
+                <motion.button 
+                  key="btn-times"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: 20, transition: { duration: 0.15 } }}
+                  transition={{ duration: 0.2 }}
+                  onClick={() => setShowEditTimesModal(true)} 
+                  className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm"
+                >
+                  <Settings2 size={16} />
+                  Upravit časy
+                </motion.button>
+              </>
             )}
           </AnimatePresence>
           <button
@@ -1021,17 +1095,24 @@ function ScheduleContent() {
             >
               <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Upravit časové bloky</h3>
 
-             {/* Animovaný přepínač typu časů */}
+              {/* Animovaný přepínač typu časů */}
               <div className="relative flex gap-1 mb-6 p-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                 {[
-                  { id: 'normal', label: 'Běžné (45m)', data: normalTimes },
-                  { id: 'uni', label: 'Vysoká (50m)', data: uniTimes }
+                  // Tady už čerpáme z naší živé paměti!
+                  { id: 'normal', label: 'Běžné', data: customNormalTimes },
+                  { id: 'uni', label: 'Vysoká', data: customUniTimes }
                 ].map((type) => {
-                  const isActive = timeSlots.length === type.data.length && timeSlots[0] === type.data[0];
+                  const isActive = timeMode === type.id;
                   return (
                     <button
                       key={type.id}
-                      onClick={() => setTimeSlots(type.data)}
+                      onClick={() => {
+                        const newMode = type.id as 'normal' | 'uni';
+                        setTimeMode(newMode);
+                        setTimeSlots(type.data);
+                        // Uložíme do DB okamžitě po přepnutí
+                        syncWithSupabase(schedule, subjects, type.data, newMode);
+                      }}
                       className={`relative flex-1 py-1.5 text-sm font-medium rounded-md transition-colors z-10 ${isActive ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"}`}
                     >
                       {isActive && (
@@ -1044,14 +1125,10 @@ function ScheduleContent() {
               </div>
 
               {/* Seznam samotných časů s animacemi */}
-              {/* Seznam samotných časů s animacemi */}
               <div className="mb-4 overflow-y-auto flex-1 min-h-[300px] pr-2 overflow-x-hidden">
-                {/* OPRAVA 1: Smazáno obalovací div, které dělalo double-height glitch. */}
                 <AnimatePresence initial={false}>
                   {timeSlots.map((slot, idx) => (
                     <DraggableTimeSlotItem 
-                      // OPRAVA 2: Zásadní! Klíč už NENÍ index. 
-                      // Díky tomu bude ten grafický efekt "držení" skutečně cestovat s položkou dolů!
                       key={slot} 
                       index={idx}
                       slot={slot}
@@ -1071,10 +1148,10 @@ function ScheduleContent() {
                   ))}
                 </AnimatePresence>
               </div>
+              {/* Tlačítko pro přidání nového času */}
               <button 
-                // OPRAVA 3: Pojistka, aby se nezbláznily klíče, když klikneš víckrát na "+"
                 onClick={() => {
-                  const base = "00:00 - 00:00";
+                  const base = "00:00-00:00";
                   const count = timeSlots.filter(s => s.startsWith(base)).length;
                   setTimeSlots([...timeSlots, count > 0 ? `${base} (${count})` : base]);
                 }} 
@@ -1082,15 +1159,31 @@ function ScheduleContent() {
               >
                 <Plus className="w-5 h-5 mx-auto" />
               </button>
-              <button 
-                onClick={() => {
-                  setShowEditTimesModal(false);
-                  syncWithSupabase(schedule, subjects, timeSlots); // Uloží časy
-                }} 
-                className="w-full px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 shadow-sm hover:shadow active:scale-[0.98] transition-all duration-200"
-              >
-                Hotovo
-              </button>
+              
+              {/* Spodní lišta s tlačítky Obnovit a Hotovo */}
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => {
+                    if (window.confirm("Opravdu chcete obnovit výchozí časy pro tento režim?")) {
+                      const defaults = timeMode === 'normal' ? normalTimes : uniTimes;
+                      setTimeSlots(defaults);
+                      syncWithSupabase(schedule, subjects, defaults, timeMode);
+                    }
+                  }} 
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100 active:scale-[0.98] transition-all duration-200 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
+                >
+                  Obnovit výchozí
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowEditTimesModal(false);
+                    syncWithSupabase(schedule, subjects, timeSlots); // Uloží časy
+                  }} 
+                  className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 shadow-sm hover:shadow active:scale-[0.98] transition-all duration-200"
+                >
+                  Hotovo
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
@@ -1130,6 +1223,128 @@ function ScheduleContent() {
                 </button>
                 <button onClick={confirmDelete} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 shadow-sm hover:shadow active:scale-95 transition-all duration-200">
                   Smazat
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+
+
+      {/* MODAL: Import/Export (Sdílení) */}
+      <AnimatePresence>
+        {showShareModal && (
+          <motion.div 
+            key="modal-backdrop-share"
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 10 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", stiffness: 400, damping: 30 }}
+              className="bg-white dark:bg-gray-800 rounded-xl max-w-lg w-full p-6 shadow-2xl flex flex-col"
+            >
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-6">Sdílet / Importovat rozvrh</h3>
+
+              {/* Sekce EXPORT */}
+              <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                  <Share2 size={16} className="text-indigo-500" /> Váš kód rozvrhu
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  Pošlete tento kód kamarádovi. Pozor, kód je dlouhý, doporučujeme použít tlačítko pro kopírování.
+                </p>
+                
+                {/* VYLEPŠENÍ: Větší, statický display pro kód, do kterého nelze psát */}
+                <div className="relative group">
+                  <div className="w-full h-24 p-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg text-[11px] font-mono text-gray-500 dark:text-gray-400 break-all overflow-y-auto select-all cursor-default">
+                    {getExportCode()}
+                  </div>
+                  <button 
+                    onClick={copyToClipboard}
+                    className="absolute top-1 right-1 flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-300 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900 shadow-sm active:scale-95 transition-all"
+                  >
+                    {copySuccess ? "Zkopírováno!" : <><Copy size={14} /> Kopírovat kód</>}
+                  </button>
+                </div>
+              </div>
+
+              {/* Sekce IMPORT */}
+              <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                  <Download size={16} className="text-indigo-500" /> Nahrát z kódu
+                </h4>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                  Vložte kód rozvrhu od kamaráda.
+                </p>
+                <textarea 
+                  value={importCode}
+                  onChange={(e) => setImportCode(e.target.value)}
+                  placeholder="Zde vložte zkopírovaný kód..."
+                  className="w-full h-20 p-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-500 rounded-lg text-sm text-gray-900 dark:text-white outline-none resize-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Spodní lišta s tlačítky - VYLEPŠENÍ: Přesunuto dolu, vlevo zrušit, vpravo nahrát */}
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => { setShowShareModal(false); setImportCode(""); }} 
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100 active:scale-[0.98] transition-all duration-200 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 font-medium"
+                >
+                  Zrušit
+                </button>
+                <button 
+                  onClick={handleImportAttempt}
+                  disabled={!importCode.trim()}
+                  className="flex-1 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-medium hover:bg-gray-800 dark:hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm active:scale-[0.98]"
+                >
+                  Importovat rozvrh
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL: Custom Confirm pro Import (stejný styl jako delete modal) */}
+      <AnimatePresence>
+        {showConfirmImportModal && (
+          <motion.div 
+            key="modal-backdrop-confirm-import"
+            initial={{ opacity: 0 }} 
+            animate={{ opacity: 1 }} 
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.1 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1001] p-4"
+          >
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }} 
+              animate={{ opacity: 1, scale: 1, y: 0 }} 
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              transition={{ type: "spring", stiffness: 500, damping: 30 }}
+              className="bg-white dark:bg-gray-800 rounded-xl max-w-sm w-full p-6 shadow-2xl border border-gray-100 dark:border-gray-700"
+            >
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 flex items-center justify-center bg-amber-50 dark:bg-amber-900/30 text-amber-500 dark:text-amber-400 rounded-full shrink-0">
+                  <AlertTriangle size={24} />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Opravdu přepsat rozvrh?</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
+                Nahráním nového rozvrhu ztratíte veškerá svá stávající data. Tuto akci nelze vzít zpět. Chcete pokračovat?
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => { setShowConfirmImportModal(false); setPendingImportData(null); }} className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 font-medium active:scale-95 transition-all">
+                  Zrušit
+                </button>
+                <button onClick={finalizeImport} className="flex-1 px-4 py-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-lg font-medium hover:bg-gray-800 dark:hover:bg-gray-100 shadow active:scale-95 transition-all">
+                  Ano, přepsat
                 </button>
               </div>
             </motion.div>
