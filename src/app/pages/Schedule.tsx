@@ -74,8 +74,12 @@ interface DraggableClassProps {
 const seenClassIds = new Set<string>();
 
 function DraggableClass({ classData, abbr, isDense, isDeleting, isEditing, onClick, onEdit, onDelete, onDragEnd }: DraggableClassProps) {
-  const isNewRef = useRef(!seenClassIds.has(classData.id));
-  useEffect(() => { seenClassIds.add(classData.id); }, [classData.id]);
+  // ZAMRAZENO: Vypočítáme animaci jen jednou při zrodu komponenty a už nikdy ji neměníme
+  const [initialAnim] = useState(() => !seenClassIds.has(classData.id) ? { opacity: 0, scale: 0.8 } : false);
+  
+  useEffect(() => { 
+    seenClassIds.add(classData.id); 
+  }, [classData.id]);
 
   const [{ isDragging }, drag, dragPreview] = useDrag({
     type: ItemType,
@@ -106,7 +110,7 @@ function DraggableClass({ classData, abbr, isDense, isDeleting, isEditing, onCli
         onClick={onClick}
         style={{ backgroundColor: bg, color: textCol, border }}
         layoutId={classData.id}
-        initial={isNewRef.current ? { opacity: 0, scale: 0.8 } : false}
+        initial={initialAnim}
         animate={{ opacity: isDeleting ? 0 : 1, scale: isDeleting ? 0.8 : 1 }}
         transition={animationConfig}
         className={`relative rounded-lg ${shouldShrink ? 'p-1.5' : 'p-2'} h-full flex flex-col justify-between ${
@@ -398,6 +402,10 @@ function ScheduleContent() {
   const [isOddWeek, setIsOddWeek] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
 
+  useEffect(() => {
+    seenClassIds.clear();
+  }, []);
+
   // --- STAVY PRO DYNAMICKÉ ČASOVÉ SLOTY ---
   const [timeMode, setTimeMode] = useState<'normal' | 'uni'>('normal');
   const [customNormalTimes, setCustomNormalTimes] = useState<string[]>(normalTimes);
@@ -418,6 +426,46 @@ function ScheduleContent() {
       updated.splice(hoverIndex, 0, moved);
       return updated;
     });
+  }, []);
+
+  // --- DRAFT STAVY PRO MODÁL ČASŮ (Nečistopisy) ---
+  const [draftTimeMode, setDraftTimeMode] = useState<'normal' | 'uni'>('normal');
+  const [draftNormalTimes, setDraftNormalTimes] = useState<string[]>([]);
+  const [draftUniTimes, setDraftUniTimes] = useState<string[]>([]);
+  const [timesModalError, setTimesModalError] = useState<string | null>(null);
+
+  const openTimesModal = () => {
+    setDraftTimeMode(timeMode);
+    setDraftNormalTimes(customNormalTimes);
+    setDraftUniTimes(customUniTimes);
+    setTimesModalError(null);
+    setShowEditTimesModal(true);
+  };
+
+  const handleSaveTimes = () => {
+    const finalSlots = draftTimeMode === 'normal' ? draftNormalTimes : draftUniTimes;
+    
+    // VALIDACE: Přetéká nějaká hodina mimo nové rozmezí hodin?
+    const requiredSlots = Math.max(0, ...schedule.map(c => c.timeSlot + c.duration));
+    if (requiredSlots > finalSlots.length) {
+      setTimesModalError(`Nelze uložit. Máte v rozvrhu předměty, které vyžadují alespoň ${requiredSlots} bloků (tento režim jich má aktuálně jen ${finalSlots.length}). Nejprve tyto předměty odstraňte nebo přesuňte.`);
+      return;
+    }
+
+    // ULOŽENÍ VŠEHO Z DRAFTU DO OSTRÉ VERZE
+    setTimeMode(draftTimeMode);
+    setCustomNormalTimes(draftNormalTimes);
+    setCustomUniTimes(draftUniTimes);
+    setTimeSlots(finalSlots);
+    syncWithSupabase(schedule, subjects, finalSlots, draftTimeMode);
+    setShowEditTimesModal(false);
+  };
+
+  const moveDraftTimeSlot = useCallback((dragIndex: number, hoverIndex: number, activeSlots: string[], setSlots: (s: string[]) => void) => {
+    const updated = [...activeSlots];
+    const [moved] = updated.splice(dragIndex, 1);
+    updated.splice(hoverIndex, 0, moved);
+    setSlots(updated);
   }, []);
 
   // --- STAVY PŘEDMĚTŮ ---
@@ -500,37 +548,60 @@ function ScheduleContent() {
   const [classForm, setClassForm] = useState<{subject: string; teacher: string; room: string; type: ClassType; duration: number}>({ 
     subject: "", teacher: "", room: "", type: "Běžný", duration: 1 
   });
+  const [durationError, setDurationError] = useState<string | null>(null); // NOVÁ PAMĚŤ NA CHYBU
 
+  useEffect(() => {
+    if (durationError) {
+      const timer = setTimeout(() => setDurationError(null), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [durationError]);
+
+  // Funkce, která bleskově spočítá, kolik políček je od vybraného času volných
+  const getMaxAllowedDuration = () => {
+    let max = 0;
+    for (let i = draftSlot.timeSlot; i < timeSlots.length; i++) {
+      const occupying = schedule.find(c => c.day === draftSlot.day && c.timeSlot <= i && c.timeSlot + c.duration > i);
+      if (occupying && occupying.id !== editingClassId) break;
+      max++;
+    }
+    return max;
+  };
   // --- POMOCNÁ FUNKCE PRO UKLÁDÁNÍ ---
-  const syncWithSupabase = async (currentSchedule, currentSubjects, currentTimeSlots) => {
+  const syncWithSupabase = async (
+    currentSchedule?: ClassBlock[], 
+    currentSubjects?: { [key: string]: SubjectData }, 
+    currentTimeSlots?: string[],
+    modeOverride?: 'normal' | 'uni' // Pomocný parametr pro rychlé přepnutí
+  ) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        return;
-      }
+      if (!user) return;
+
+      const finalSchedule = currentSchedule || schedule;
+      const finalSubjects = currentSubjects || subjects;
+      const finalTimeSlots = currentTimeSlots || timeSlots;
+      const finalMode = modeOverride || timeMode;
+      
+      const finalNormal = finalMode === 'normal' ? finalTimeSlots : customNormalTimes;
+      const finalUni = finalMode === 'uni' ? finalTimeSlots : customUniTimes;
 
       const scheduleInfo = {
-        timeSlots: currentTimeSlots || timeSlots,
-        subjects: currentSubjects || subjects,
-        blocks: currentSchedule || schedule
+        timeSlots: finalTimeSlots,
+        timeMode: finalMode,
+        customNormalTimes: finalNormal,
+        customUniTimes: finalUni,
+        subjects: finalSubjects,
+        blocks: finalSchedule
       };
 
-
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('schedule')
-        .upsert({ 
-          user: user.id, 
-          schedule_info: scheduleInfo 
-        }, { onConflict: 'user' })
-        .select(); // Přidáme select, abychom viděli, co se vrátilo
+        .upsert({ user: user.id, schedule_info: scheduleInfo }, { onConflict: 'user' });
 
-      if (error) {
-
-      } else {
-        
-      }
+      if (error) console.error("Chyba ukládání:", error);
     } catch (err) {
-
+      console.error(err);
     }
   };
 
@@ -550,13 +621,23 @@ function ScheduleContent() {
 
         if (error) throw error;
 
-        // 3. Pokud data existují, "napumpujeme" je do stavů
+       // 3. Pokud data existují, "napumpujeme" je do stavů
         if (data && data.schedule_info) {
           const info = data.schedule_info;
           
-          if (info.timeSlots) setTimeSlots(info.timeSlots);
+          if (info.timeMode) setTimeMode(info.timeMode);
+          if (info.customNormalTimes) setCustomNormalTimes(info.customNormalTimes);
+          if (info.customUniTimes) setCustomUniTimes(info.customUniTimes);
           if (info.subjects) setSubjects(info.subjects);
           if (info.blocks) setSchedule(info.blocks);
+
+          // Správné naplnění aktuálního view
+          if (info.timeMode && info.customNormalTimes && info.customUniTimes) {
+            setTimeSlots(info.timeMode === 'normal' ? info.customNormalTimes : info.customUniTimes);
+          } else if (info.timeSlots) {
+            setTimeSlots(info.timeSlots);
+            setCustomNormalTimes(info.timeSlots);
+          }
           
           console.log("Data úspěšně načtena z databáze.");
         }
@@ -569,7 +650,7 @@ function ScheduleContent() {
   }, []);
 
   // --- HANDLERY PRO PŘEDMĚTY ---
-  const handleSaveSubject = () => {
+ const handleSaveSubject = () => {
     if (!newSubjectName.trim()) return;
     
     const updatedSubjects = { ...subjects };
@@ -579,8 +660,24 @@ function ScheduleContent() {
     setSubjects(updatedSubjects);
     setShowAddSubjectModal(false);
 
-    // ODESLÁNÍ DO DB (posíláme aktualizované předměty)
-    syncWithSupabase(schedule, updatedSubjects, timeSlots);
+    let updatedSchedule = schedule;
+    if (editingSubjectName) {
+      updatedSchedule = schedule.map(cls => {
+        // Najdeme všechny hodiny, které patřily k původnímu názvu
+        if (cls.subject === editingSubjectName) {
+          return {
+            ...cls,
+            subject: newSubjectName,   // Změníme název na nový
+            color: newSubjectColor     // Změníme i barvu, pokud ji uživatel upravil
+          };
+        }
+        return cls;
+      });
+      setSchedule(updatedSchedule);
+    }
+
+    // ODESLÁNÍ DO DB (pošleme už i ten upravený rozvrh)
+    syncWithSupabase(updatedSchedule, updatedSubjects, timeSlots);
   };
 
   const handleEditSubject = (subjName: string) => {
@@ -680,6 +777,7 @@ function ScheduleContent() {
   };
 
   const openClassModal = (day: number, timeSlot: number, defaultSubj: string, clsToEdit?: ClassBlock) => {
+    setDurationError(null);
     setDraftSlot({ day, timeSlot });
     if (clsToEdit) {
       setEditingClassId(clsToEdit.id);
@@ -780,7 +878,7 @@ function ScheduleContent() {
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: 20, transition: { duration: 0.15 } }}
                   transition={{ duration: 0.2 }}
-                  onClick={() => setShowEditTimesModal(true)} 
+                  onClick={openTimesModal}
                   className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300 shadow-sm"
                 >
                   <Settings2 size={16} />
@@ -852,7 +950,7 @@ function ScheduleContent() {
                         onDragEndClass={() => syncWithSupabase(scheduleRef.current, subjects, timeSlots)}
                         onDropSubject={handleDropSubject}
                         onEmptyClick={handleEmptyClick}
-                        onClassClick={() => cls && navigate(`/panel/rozvrh/${cls.id}`)}
+                        onClassClick={() => { if (!isEditing && cls) navigate(`/panel/rozvrh/${cls.id}`); }}
                         onEditClass={() => openClassModal(dayIndex, timeIndex, cls?.subject || "", cls)}
                         onDeleteClass={() => cls && handleDeleteClass(cls.id)}
                       />
@@ -937,33 +1035,59 @@ function ScheduleContent() {
                 {/* 1. Vlastní Number Input s tlačítky vpravo a 100% schovanými defaultními šipkami */}
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">Délka (počet bloků)</label>
-                  <div className="flex items-center w-full border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-shadow bg-white dark:bg-gray-800">
+                  <div className={`flex items-center w-full border rounded-lg overflow-hidden transition-shadow bg-white dark:bg-gray-800 ${durationError ? 'border-red-400 focus-within:ring-red-500' : 'border-gray-300 dark:border-gray-600 focus-within:ring-2 focus-within:ring-indigo-500'}`}>
                     <input 
                       type="number" 
                       min="1" 
-                      max={timeSlots.length - draftSlot.timeSlot} 
+                      max={getMaxAllowedDuration()} 
                       value={classForm.duration} 
-                      onChange={(e) => setClassForm({...classForm, duration: parseInt(e.target.value) || 1})} 
-                      // Magie na zrušení šipek: Tailwind class pro Webkit a m-0 + inline styl pro Firefox
-                      className="flex-1 bg-transparent border-none p-2 pl-3 dark:text-white focus:ring-0 font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"                      style={{ MozAppearance: 'textfield' }} 
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 1;
+                        const maxAllowed = getMaxAllowedDuration();
+                        if (val > maxAllowed) {
+                           setClassForm({...classForm, duration: maxAllowed});
+                           setDurationError(draftSlot.timeSlot + maxAllowed >= timeSlots.length ? "Hodina by přesáhla konec rozvrhu." : "Překrývá se s jiným předmětem.");
+                        } else {
+                           setClassForm({...classForm, duration: val});
+                           setDurationError(null);
+                        }
+                      }}
+                      className="flex-1 bg-transparent border-none p-2 pl-3 dark:text-white focus:ring-0 font-medium [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:m-0 [&::-webkit-inner-spin-button]:m-0"
+                      style={{ MozAppearance: 'textfield' }} 
                     />
-                    <div className="flex border-l border-gray-200 dark:border-gray-600">
+                    <div className={`flex border-l ${durationError ? 'border-red-200 dark:border-red-900/50' : 'border-gray-200 dark:border-gray-600'}`}>
                       <button
                         type="button"
-                        onClick={() => setClassForm(prev => ({ ...prev, duration: Math.max(1, prev.duration - 1) }))}
+                        onClick={() => { setClassForm(prev => ({ ...prev, duration: Math.max(1, prev.duration - 1) })); setDurationError(null); }}
                         className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-600 transition-colors active:bg-gray-200 dark:active:bg-gray-500 font-bold border-r border-gray-200 dark:border-gray-600"
                       >
                         -
                       </button>
                       <button
                         type="button"
-                        onClick={() => setClassForm(prev => ({ ...prev, duration: Math.min(timeSlots.length - draftSlot.timeSlot, prev.duration + 1) }))}
+                        onClick={() => {
+                          const maxAllowed = getMaxAllowedDuration();
+                          if (classForm.duration >= maxAllowed) {
+                            setDurationError(draftSlot.timeSlot + maxAllowed >= timeSlots.length ? "Hodina by přesáhla konec rozvrhu." : "Nelze prodloužit, na místě je jiná hodina.");
+                          } else {
+                            setClassForm(prev => ({ ...prev, duration: prev.duration + 1 }));
+                            setDurationError(null);
+                          }
+                        }}
                         className="px-3 py-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-600 transition-colors active:bg-gray-200 dark:active:bg-gray-500 font-bold"
                       >
                         +
                       </button>
                     </div>
                   </div>
+                  {/* Animované zobrazení varování */}
+                  <AnimatePresence>
+                    {durationError && (
+                      <motion.div initial={{opacity: 0, height: 0}} animate={{opacity: 1, height: "auto"}} exit={{opacity: 0, height: 0}} className="text-red-500 text-[11px] mt-1.5 font-medium">
+                        {durationError}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* 2. Animované custom Radio Buttony */}
@@ -1095,24 +1219,17 @@ function ScheduleContent() {
             >
               <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Upravit časové bloky</h3>
 
-              {/* Animovaný přepínač typu časů */}
+              {/* Animovaný přepínač typu časů DRAFTŮ */}
               <div className="relative flex gap-1 mb-6 p-1 bg-gray-100 dark:bg-gray-700/50 rounded-lg border border-gray-200 dark:border-gray-600">
                 {[
-                  // Tady už čerpáme z naší živé paměti!
-                  { id: 'normal', label: 'Běžné', data: customNormalTimes },
-                  { id: 'uni', label: 'Vysoká', data: customUniTimes }
+                  { id: 'normal', label: 'Běžné', data: draftNormalTimes },
+                  { id: 'uni', label: 'Vysokoškolské', data: draftUniTimes }
                 ].map((type) => {
-                  const isActive = timeMode === type.id;
+                  const isActive = draftTimeMode === type.id;
                   return (
                     <button
                       key={type.id}
-                      onClick={() => {
-                        const newMode = type.id as 'normal' | 'uni';
-                        setTimeMode(newMode);
-                        setTimeSlots(type.data);
-                        // Uložíme do DB okamžitě po přepnutí
-                        syncWithSupabase(schedule, subjects, type.data, newMode);
-                      }}
+                      onClick={() => setDraftTimeMode(type.id as 'normal' | 'uni')}
                       className={`relative flex-1 py-1.5 text-sm font-medium rounded-md transition-colors z-10 ${isActive ? "text-gray-900 dark:text-white" : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200"}`}
                     >
                       {isActive && (
@@ -1125,49 +1242,75 @@ function ScheduleContent() {
               </div>
 
               {/* Seznam samotných časů s animacemi */}
-              <div className="mb-4 overflow-y-auto flex-1 min-h-[300px] pr-2 overflow-x-hidden">
-                <AnimatePresence initial={false}>
-                  {timeSlots.map((slot, idx) => (
-                    <DraggableTimeSlotItem 
-                      key={slot} 
-                      index={idx}
-                      slot={slot}
-                      moveSlot={moveTimeSlot}
-                      updateSlot={(index, val) => {
-                        const newSlots = [...timeSlots];
-                        newSlots[index] = val;
-                        setTimeSlots(newSlots);
-                        syncWithSupabase(schedule, subjects, newSlots);
-                      }}
-                      deleteSlot={(index) => {
-                        const updated = timeSlots.filter((_, i) => i !== index);
-                        setTimeSlots(updated);
-                        syncWithSupabase(schedule, subjects, updated);
-                      }}
-                    />
-                  ))}
+              <div className="relative mb-4 overflow-y-auto flex-1 min-h-[300px] pr-2 overflow-x-hidden">
+                <AnimatePresence mode="popLayout">
+                  <motion.div
+                    layout
+                    key={draftTimeMode} 
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 20 }}
+                    transition={{ duration: 0.2 }}
+                    className="w-full"
+                  >
+                    <AnimatePresence initial={false}>
+                      {(draftTimeMode === 'normal' ? draftNormalTimes : draftUniTimes).map((slot, idx) => {
+                        const activeList = draftTimeMode === 'normal' ? draftNormalTimes : draftUniTimes;
+                        const setList = draftTimeMode === 'normal' ? setDraftNormalTimes : setDraftUniTimes;
+                        
+                        return (
+                          <DraggableTimeSlotItem 
+                            key={slot} 
+                            index={idx}
+                            slot={slot}
+                            moveSlot={(dragIndex: number, hoverIndex: number) => moveDraftTimeSlot(dragIndex, hoverIndex, activeList, setList)}
+                            updateSlot={(index: number, val: string) => {
+                              const updated = [...activeList];
+                              updated[index] = val;
+                              setList(updated);
+                            }}
+                            deleteSlot={(index: number) => {
+                              const updated = activeList.filter((_, i) => i !== index);
+                              setList(updated);
+                            }}
+                          />
+                        )
+                      })}
+                    </AnimatePresence>
+                  </motion.div>
                 </AnimatePresence>
               </div>
+
               {/* Tlačítko pro přidání nového času */}
               <button 
                 onClick={() => {
+                  const activeList = draftTimeMode === 'normal' ? draftNormalTimes : draftUniTimes;
+                  const setList = draftTimeMode === 'normal' ? setDraftNormalTimes : setDraftUniTimes;
                   const base = "00:00-00:00";
-                  const count = timeSlots.filter(s => s.startsWith(base)).length;
-                  setTimeSlots([...timeSlots, count > 0 ? `${base} (${count})` : base]);
+                  const count = activeList.filter(s => s.startsWith(base)).length;
+                  setList([...activeList, count > 0 ? `${base} (${count})` : base]);
                 }} 
                 className="w-full py-2 mb-4 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:bg-gray-100 active:scale-[0.98] transition-all duration-200 dark:border-gray-600 dark:hover:bg-gray-700"
               >
                 <Plus className="w-5 h-5 mx-auto" />
               </button>
+
+              {/* Chybová hláška */}
+              <AnimatePresence>
+                {timesModalError && (
+                  <motion.div initial={{opacity: 0, height: 0}} animate={{opacity: 1, height: "auto"}} exit={{opacity: 0, height: 0}} className="text-red-500 text-[12px] font-medium mb-4 text-center">
+                    {timesModalError}
+                  </motion.div>
+                )}
+              </AnimatePresence>
               
               {/* Spodní lišta s tlačítky Obnovit a Hotovo */}
               <div className="flex gap-3">
                 <button 
                   onClick={() => {
                     if (window.confirm("Opravdu chcete obnovit výchozí časy pro tento režim?")) {
-                      const defaults = timeMode === 'normal' ? normalTimes : uniTimes;
-                      setTimeSlots(defaults);
-                      syncWithSupabase(schedule, subjects, defaults, timeMode);
+                      if (draftTimeMode === 'normal') setDraftNormalTimes(normalTimes);
+                      else setDraftUniTimes(uniTimes);
                     }
                   }} 
                   className="px-4 py-2 border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100 active:scale-[0.98] transition-all duration-200 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -1175,10 +1318,7 @@ function ScheduleContent() {
                   Obnovit výchozí
                 </button>
                 <button 
-                  onClick={() => {
-                    setShowEditTimesModal(false);
-                    syncWithSupabase(schedule, subjects, timeSlots); // Uloží časy
-                  }} 
+                  onClick={handleSaveTimes} 
                   className="flex-1 px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 shadow-sm hover:shadow active:scale-[0.98] transition-all duration-200"
                 >
                   Hotovo
