@@ -67,36 +67,40 @@ interface DraggableClassProps {
   onClick: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onDragEnd: () => void; // Vráceno zpět pro ukládání po puštění
+  onDragEnd: () => void;
 }
-
 
 const seenClassIds = new Set<string>();
 
 function DraggableClass({ classData, abbr, isDense, isDeleting, isEditing, onClick, onEdit, onDelete, onDragEnd }: DraggableClassProps) {
-  // ZAMRAZENO: Vypočítáme animaci jen jednou při zrodu komponenty a už nikdy ji neměníme
-  const [initialAnim] = useState(() => !seenClassIds.has(classData.id) ? { opacity: 0, scale: 0.8 } : false);
-  
-  useEffect(() => { 
-    seenClassIds.add(classData.id); 
+  const isNewRef = useRef(!seenClassIds.has(classData.id));
+  useEffect(() => {
+    seenClassIds.add(classData.id);
   }, [classData.id]);
 
   const [{ isDragging }, drag, dragPreview] = useDrag({
     type: ItemType,
     item: { ...classData },
-    canDrag: isEditing, // ZAMYKÁNÍ DRAGU
+    canDrag: isEditing, // ZAMYKÁNÍ DRAGU: Lze přesouvat jen v Edit módu
     end: () => onDragEnd(),
     collect: (monitor) => ({ 
       isDragging: monitor.getItemType() === ItemType && monitor.getItem()?.id === classData.id 
     }),
   });
 
-  useEffect(() => { dragPreview(getEmptyImage(), { captureDraggingState: true }); }, [dragPreview]);
+  useEffect(() => {
+    dragPreview(getEmptyImage(), { captureDraggingState: true });
+  }, [dragPreview]);
 
-  const animationConfig = isDragging ? { type: "spring", stiffness: 500, damping: 30 } : { type: "spring", stiffness: 300, damping: 20 };
+  const animationConfig = isDragging 
+    ? { type: "spring", stiffness: 500, damping: 30 } 
+    : { type: "spring", stiffness: 300, damping: 20 };
+
   const isSolid = classData.type === "Přednáška" || classData.type === "Běžný";
   const isCompact = isDense && classData.duration === 1;
-  const shouldShrink = isCompact && classData.subject.length > 13;
+  const isLongText = classData.subject.length > 13;
+  const shouldShrink = isCompact && isLongText;
+  
   const { h, s, l } = classData.color;
   const isLight = l > 60 || (h > 35 && h < 100 && l > 40);
   
@@ -105,31 +109,30 @@ function DraggableClass({ classData, abbr, isDense, isDeleting, isEditing, onCli
   const border = isSolid ? "none" : `2px solid hsl(${h}, ${s}%, ${l}%)`;
 
   return (
+    // ZMĚNA: Kurzor se mění podle isEditing
     <div ref={drag} className={`w-full h-full select-none ${isEditing ? 'cursor-grab' : 'cursor-pointer'} ${isDragging ? "pointer-events-none" : "pointer-events-auto"}`}>
       <motion.div
-        onClick={onClick}
+        onClick={!isEditing ? onClick : undefined} // ZMĚNA: Kliknutí pro detail funguje POUZE mimo Edit mód
         style={{ backgroundColor: bg, color: textCol, border }}
         layoutId={classData.id}
-        initial={initialAnim}
+        initial={isNewRef.current ? { opacity: 0, scale: 0.8 } : false}
         animate={{ opacity: isDeleting ? 0 : 1, scale: isDeleting ? 0.8 : 1 }}
         transition={animationConfig}
         className={`relative rounded-lg ${shouldShrink ? 'p-1.5' : 'p-2'} h-full flex flex-col justify-between ${
           isDragging 
             ? "is-dragging scale-[1.05] rotate-1 shadow-2xl ring-4 ring-indigo-400/50 z-[999]" 
-            // KRÁSNÝ HOVER EFEKT V READ-ONLY MÓDU:
-            : (isEditing ? "shadow-sm" : "shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-200")
+            : "shadow-sm hover:shadow-md transition-shadow"
         }`}
       >
-        {/* Plovoucí bublina s akcemi - Animovaný pop-up, zobrazí se jen v Edit módu */}
-        <AnimatePresence initial={false}>
+        {/* ZMĚNA: Plovoucí bublina s akcemi se zobrazuje trvale, ale POUZE V EDIT MÓDU (žádný hover) */}
+        <AnimatePresence>
           {isEditing && (
             <motion.div 
-              key="class-edit-popup"
               initial={{ opacity: 0, scale: 0.5, x: -10, y: 10 }}
               animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
               exit={{ opacity: 0, scale: 0.5, x: -10, y: 10 }}
-              transition={{ type: "spring", stiffness: 500, damping: 25, delay: 0.05 }}
-              className="absolute -top-2.5 -right-2.5 flex gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-full p-1 z-30 transition-shadow hover:ring-indigo-300"
+              transition={{ type: "spring", stiffness: 500, damping: 25 }}
+              className="absolute -top-2.5 -right-2.5 flex gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-full p-1 z-30 transition-shadow hover:ring-2 hover:ring-indigo-300"
             >
               <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full transition-colors"><Edit size={12} /></button>
               <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-full transition-colors"><Trash2 size={12} /></button>
@@ -138,7 +141,9 @@ function DraggableClass({ classData, abbr, isDense, isDeleting, isEditing, onCli
         </AnimatePresence>
 
         <div className="min-h-0">
-          <div className={`font-bold ${shouldShrink ? 'text-[10px] line-clamp-3' : 'text-[12px] line-clamp-2'} leading-tight mb-0.5`} title={classData.subject}>{classData.subject}</div>
+          <div className={`font-bold ${shouldShrink ? 'text-[10px] line-clamp-3' : 'text-[12px] line-clamp-2'} leading-tight mb-0.5`} title={classData.subject}>
+            {classData.subject}
+          </div>
           <div className={`${shouldShrink ? 'text-[9px]' : 'text-[11px]'} truncate opacity-90`}>{classData.teacher}</div>
         </div>
         
@@ -540,6 +545,9 @@ function ScheduleContent() {
   const longClassesDuration = schedule.filter(c => c.duration > 1).reduce((acc, c) => acc + c.duration, 0);
   const isDense = totalDuration > 0 && longClassesDuration >= totalDuration / 2;
   const currentCellWidth = isDense ? DENSE_CELL_WIDTH : NORMAL_CELL_WIDTH;
+
+  const uniqueTeachers = Array.from(new Set(schedule.map(c => c.teacher).filter(t => t.trim() !== "")));
+  const uniqueRooms = Array.from(new Set(schedule.map(c => c.room).filter(r => r.trim() !== "")));
 
   const [showAddClassModal, setShowAddClassModal] = useState(false);
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
@@ -1026,10 +1034,30 @@ function ScheduleContent() {
                   <div>
                     <label className="block text-sm text-gray-600 mb-1">Vyučující</label>
                     <input type="text" value={classForm.teacher} onChange={(e) => setClassForm({...classForm, teacher: e.target.value})} placeholder="Např. Novák" className="w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                    {/* Rychlý výběr nedávných vyučujících */}
+                    {uniqueTeachers.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {uniqueTeachers.filter(t => t !== classForm.teacher).slice(0, 4).map(t => (
+                          <button key={t} type="button" onClick={() => setClassForm({ ...classForm, teacher: t })} className="px-2 py-1 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                            {t}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm text-gray-600 mb-1">Místnost</label>
                     <input type="text" value={classForm.room} onChange={(e) => setClassForm({...classForm, room: e.target.value})} placeholder="Např. A201" className="w-full p-2 border border-gray-300 rounded-lg dark:bg-gray-700 dark:border-gray-600 dark:text-white" />
+                    {/* Rychlý výběr nedávných místností */}
+                    {uniqueRooms.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 mt-2">
+                        {uniqueRooms.filter(r => r !== classForm.room).slice(0, 4).map(r => (
+                          <button key={r} type="button" onClick={() => setClassForm({ ...classForm, room: r })} className="px-2 py-1 text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+                            {r}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
                 {/* 1. Vlastní Number Input s tlačítky vpravo a 100% schovanými defaultními šipkami */}
