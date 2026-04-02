@@ -6,7 +6,7 @@ import { supabase } from "../../lib/supabase";
 
 export default function Layout() {
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   
   // Stavy pro uživatele a načítání
@@ -100,7 +100,7 @@ export default function Layout() {
   };
 
   const toggleTheme = () => {
-    setTheme(theme === "dark" ? "light" : "dark");
+    setTheme(resolvedTheme === "dark" ? "light" : "dark");
   };
 
   // Zobrazení loaderu během ověřování
@@ -191,7 +191,7 @@ export default function Layout() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="h-16 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center justify-end px-6 gap-3">
           <button onClick={toggleTheme} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
-            {mounted && (theme === "dark" ? <Sun className="w-5 h-5 text-gray-300" /> : <Moon className="w-5 h-5 text-gray-600" />)}
+            {mounted && (resolvedTheme === "dark" ? <Sun className="w-5 h-5 text-gray-300" /> : <Moon className="w-5 h-5 text-gray-600" />)}
           </button>
           <button className="relative p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
             <Bell className="w-5 h-5 text-gray-600 dark:text-gray-300" />
