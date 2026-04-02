@@ -45,6 +45,7 @@ const PREDEFINED_HUES = [
 const DEFAULT_COLOR: ColorData = { h: 215, s: 75, l: 55 }; // Pěkná modrá jako výchozí
 
 type ClassType = "Běžný" | "Přednáška" | "Cvičení" | "Seminář";
+type WeekType = "all" | "odd" | "even";
 
 interface ClassBlock {
   id: string;
@@ -56,6 +57,7 @@ interface ClassBlock {
   timeSlot: number;
   type: ClassType;
   duration: number;
+  week?: WeekType;
 }
 
 interface DraggableClassProps {
@@ -104,21 +106,31 @@ function DraggableClass({ classData, abbr, isDense, isDeleting, isEditing, onCli
   const { h, s, l } = classData.color;
   const isLight = l > 60 || (h > 35 && h < 100 && l > 40);
   
-  const bg = isSolid ? `hsl(${h}, ${s}%, ${l}%)` : `hsl(${h}, ${s}%, 95%)`;
-  const textCol = isSolid ? (isLight ? "#111827" : "#ffffff") : `hsl(${h}, ${s}%, 20%)`;
-  const border = isSolid ? "none" : `2px solid hsl(${h}, ${s}%, ${l}%)`;
+  // ZMĚNA: Přesunuto do CSS proměnných. Žádná průhlednost. V Dark modu jen podstrčíme tmavší pozadí pro nesolidní hodiny.
+  const styleVars = {
+    '--bg-solid': `hsl(${h}, ${s}%, ${l}%)`,
+    '--text-solid': isLight ? "#111827" : "#ffffff",
+    '--bg-light': `hsl(${h}, ${s}%, 95%)`,
+    '--bg-light-dark': `hsl(${h}, ${s}%, 15%)`, // Tmavá alternativa pro Cvičení v dark modu
+    '--text-dark': `hsl(${h}, ${s}%, 20%)`,
+    '--text-dark-dark': `hsl(${h}, ${s}%, 85%)`,
+    '--border-col': `hsl(${h}, ${s}%, ${l}%)`
+  } as React.CSSProperties;
 
   return (
-    // ZMĚNA: Kurzor se mění podle isEditing
     <div ref={drag} className={`w-full h-full select-none ${isEditing ? 'cursor-grab' : 'cursor-pointer'} ${isDragging ? "pointer-events-none" : "pointer-events-auto"}`}>
       <motion.div
-        onClick={!isEditing ? onClick : undefined} // ZMĚNA: Kliknutí pro detail funguje POUZE mimo Edit mód
-        style={{ backgroundColor: bg, color: textCol, border }}
+        onClick={!isEditing ? onClick : undefined}
+        style={styleVars}
         layoutId={classData.id}
         initial={isNewRef.current ? { opacity: 0, scale: 0.8 } : false}
         animate={{ opacity: isDeleting ? 0 : 1, scale: isDeleting ? 0.8 : 1 }}
         transition={animationConfig}
         className={`relative rounded-lg ${shouldShrink ? 'p-1.5' : 'p-2'} h-full flex flex-col justify-between ${
+          isSolid 
+            ? "bg-[var(--bg-solid)] text-[var(--text-solid)] border-none" 
+            : "bg-[var(--bg-light)] dark:bg-[var(--bg-light-dark)] text-[var(--text-dark)] dark:text-white border-2 border-[var(--border-col)]"
+        } ${
           isDragging 
             ? "is-dragging scale-[1.05] rotate-1 shadow-2xl ring-4 ring-indigo-400/50 z-[999]" 
             : "shadow-sm hover:shadow-md transition-shadow"
@@ -134,8 +146,8 @@ function DraggableClass({ classData, abbr, isDense, isDeleting, isEditing, onCli
               transition={{ type: "spring", stiffness: 500, damping: 25 }}
               className="absolute -top-2.5 -right-2.5 flex gap-0.5 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-xl rounded-full p-1 z-30 transition-shadow hover:ring-2 hover:ring-indigo-300"
             >
-              <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-full transition-colors"><Edit size={12} /></button>
-              <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-full transition-colors"><Trash2 size={12} /></button>
+              <button onClick={(e) => { e.stopPropagation(); onEdit(); }} className="p-1 text-gray-600 dark:text-gray-100 hover:text-indigo-600 dark:hover:text-indigo-300 rounded-full transition-colors"><Edit size={12} /></button>
+              <button onClick={(e) => { e.stopPropagation(); onDelete(); }} className="p-1 text-gray-600 dark:text-gray-100 hover:text-red-600 dark:hover:text-red-400 rounded-full transition-colors"><Trash2 size={12} /></button>
             </motion.div>
           )}
         </AnimatePresence>
@@ -152,7 +164,7 @@ function DraggableClass({ classData, abbr, isDense, isDeleting, isEditing, onCli
           <div className="flex items-center gap-1 shrink-0">
             <span className="font-mono font-bold">{abbr}</span>
             {classData.type !== 'Běžný' && (
-              <span className={`px-1 py-0.5 ${shouldShrink ? 'text-[7px]' : 'text-[8px]'} rounded font-bold leading-none ${isSolid ? 'bg-black/20 text-white' : 'bg-black/10 text-black dark:text-white dark:bg-white/20'}`}>
+              <span className={`px-1 py-0.5 ${shouldShrink ? 'text-[8px]' : 'text-[9px]'} rounded font-bold leading-none ${isSolid ? 'bg-black/20 text-white' : 'bg-black/10 text-black dark:text-white dark:bg-white/20'}`}>
                 {classData.type === 'Přednáška' ? 'PŘ' : classData.type === 'Cvičení' ? 'CV' : 'SM'}
               </span>
             )}
@@ -179,14 +191,14 @@ function DraggableSubject({ subject, data, isEditing, onEdit, onDelete }: { subj
       exit={{ opacity: 0, scale: 0.8 }}
       transition={{ duration: 0.15 }}
       ref={drag as any}
-      className={`select-none relative flex items-center gap-2 ${isEditing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} p-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors border border-gray-100 dark:border-gray-700 ${
+      className={`select-none relative flex items-center gap-2 ${isEditing ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} p-2.5 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border border-gray-200 dark:border-gray-700 shadow-sm ${
         isDragging ? "opacity-50" : "opacity-100"
       }`}
     >
       <div className="w-4 h-4 rounded shadow-sm shrink-0" style={{ backgroundColor: `hsl(${data.color.h}, ${data.color.s}%, ${data.color.l}%)` }}></div>
       <div className="flex flex-col min-w-0">
         <span className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{subject}</span>
-        <span className="text-[10px] text-gray-500 font-mono">{data.abbr}</span>
+        <span className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">{data.abbr}</span>
       </div>
       
       <AnimatePresence initial={false}>
@@ -404,7 +416,7 @@ function TimeSlot({ day, timeSlot, classData, abbr, colSpan = 1, isDense, isDele
 
 function ScheduleContent() {
   const navigate = useNavigate();
-  const [isOddWeek, setIsOddWeek] = useState(true);
+  const [activeWeekView, setActiveWeekView] = useState<'odd' | 'even'>('odd');
   const [isEditing, setIsEditing] = useState(false);
 
   useEffect(() => {
@@ -553,8 +565,8 @@ function ScheduleContent() {
   const [editingClassId, setEditingClassId] = useState<string | null>(null);
   const [draftSlot, setDraftSlot] = useState({ day: 0, timeSlot: 0 });
   
-  const [classForm, setClassForm] = useState<{subject: string; teacher: string; room: string; type: ClassType; duration: number}>({ 
-    subject: "", teacher: "", room: "", type: "Běžný", duration: 1 
+  const [classForm, setClassForm] = useState<{subject: string; teacher: string; room: string; type: ClassType; duration: number; week: WeekType}>({ 
+    subject: "", teacher: "", room: "", type: "Běžný", duration: 1, week: "all" 
   });
   const [durationError, setDurationError] = useState<string | null>(null); // NOVÁ PAMĚŤ NA CHYBU
 
@@ -789,10 +801,10 @@ function ScheduleContent() {
     setDraftSlot({ day, timeSlot });
     if (clsToEdit) {
       setEditingClassId(clsToEdit.id);
-      setClassForm({ subject: clsToEdit.subject, teacher: clsToEdit.teacher, room: clsToEdit.room, type: clsToEdit.type, duration: clsToEdit.duration });
+      setClassForm({ subject: clsToEdit.subject, teacher: clsToEdit.teacher, room: clsToEdit.room, type: clsToEdit.type, duration: clsToEdit.duration, week: clsToEdit.week || "all" });
     } else {
       setEditingClassId(null);
-      setClassForm({ subject: defaultSubj, teacher: "", room: "", type: "Běžný", duration: 1 });
+      setClassForm({ subject: defaultSubj, teacher: "", room: "", type: "Běžný", duration: 1, week: "all" });
     }
     setShowAddClassModal(true);
   };
@@ -850,14 +862,41 @@ function ScheduleContent() {
     setDeletePrompt({ ...deletePrompt, isOpen: false });
   };
 
-  const getClassForSlot = (day: number, timeSlot: number) => schedule.find(cls => cls.day === day && cls.timeSlot === timeSlot);
+  const getClassForSlot = (day: number, timeSlot: number) => schedule.find(cls => 
+    cls.day === day && 
+    cls.timeSlot === timeSlot &&
+    (!cls.week || cls.week === 'all' || cls.week === activeWeekView) // Filtruje liché/sudé
+  );
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Rozvrh hodin</h1>
+          <div className="flex items-center gap-4 mb-2">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Rozvrh hodin</h1>
+            {/* PŘEPÍNAČ TÝDNŮ */}
+            <div className="relative flex gap-1 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg border border-gray-200 dark:border-gray-700">
+              {[
+                { id: 'odd', label: 'Lichý' },
+                { id: 'even', label: 'Sudý' }
+              ].map((w) => {
+                const isActive = activeWeekView === w.id;
+                return (
+                  <button
+                    key={w.id}
+                    onClick={() => setActiveWeekView(w.id as 'odd' | 'even')}
+                    className={`relative flex-1 px-4 py-1 text-sm font-medium rounded-md transition-colors z-10 ${isActive ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'}`}
+                  >
+                    {isActive && (
+                      <motion.div layoutId="weekSwitchPill" className="absolute inset-0 bg-white dark:bg-gray-600 rounded-md shadow-sm border border-gray-200 dark:border-gray-500" transition={{ type: "spring", stiffness: 400, damping: 30 }} />
+                    )}
+                    <span className="relative z-20">{w.label}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
           <p className="text-gray-600 dark:text-gray-400">
             {isEditing ? "Upravte svůj rozvrh přetažením prvků" : "Kliknutím na hodinu zobrazíte detaily"}
           </p>
@@ -1140,7 +1179,29 @@ function ScheduleContent() {
                     })}
                   </div>
                 </div>
+
+                {/* LICHÝ / SUDÝ */}
+                <div>
+                  <label className="block text-sm text-gray-600 dark:text-gray-400 mb-2">Opakování</label>
+                  <div className="flex gap-2">
+                    {[{id: 'all', label: 'Každý týden'}, {id: 'odd', label: 'Lichý'}, {id: 'even', label: 'Sudý'}].map((w) => (
+                      <button
+                        key={w.id}
+                        type="button"
+                        onClick={() => setClassForm({...classForm, week: w.id as WeekType})}
+                        className={`flex-1 py-2 px-3 text-sm font-medium rounded-lg border transition-all ${
+                          classForm.week === w.id 
+                            ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:border-indigo-700 dark:text-indigo-300' 
+                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {w.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+
 
               {/* 3. Tlačítka s animací zmáčknutí (active:scale-95) a plynulým hoverem */}
               <div className="flex gap-3">
