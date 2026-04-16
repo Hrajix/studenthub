@@ -582,7 +582,14 @@ function ScheduleContent() {
     let max = 0;
     for (let i = draftSlot.timeSlot; i < timeSlots.length; i++) {
       const occupying = schedule.find(c => c.day === draftSlot.day && c.timeSlot <= i && c.timeSlot + c.duration > i);
-      if (occupying && occupying.id !== editingClassId) break;
+      if (occupying && occupying.id !== editingClassId) {
+        // Pokud třída patří jen do opačného týdne, ignorujeme ji (neblokuje místo).
+        if (occupying.week && occupying.week !== 'all' && occupying.week !== activeWeekView) {
+          // ignorujeme tuto třídu
+        } else {
+          break;
+        }
+      }
       max++;
     }
     return max;
@@ -605,6 +612,7 @@ function ScheduleContent() {
       
       const finalNormal = finalMode === 'normal' ? finalTimeSlots : customNormalTimes;
       const finalUni = finalMode === 'uni' ? finalTimeSlots : customUniTimes;
+      const finalActiveWeekView = activeWeekView;
 
       const scheduleInfo = {
         timeSlots: finalTimeSlots,
@@ -612,7 +620,8 @@ function ScheduleContent() {
         customNormalTimes: finalNormal,
         customUniTimes: finalUni,
         subjects: finalSubjects,
-        blocks: finalSchedule
+        blocks: finalSchedule,
+        activeWeekView: finalActiveWeekView
       };
 
       const { error } = await supabase
@@ -624,6 +633,12 @@ function ScheduleContent() {
       console.error(err);
     }
   };
+
+  // Když uživatel změní zobrazený týden (lichý/sudý), ihned to uložíme do Supabase
+  useEffect(() => {
+    // Voláme bez parametrů, funkce vezme aktuální stavy (`schedule`, `subjects`, `timeSlots`, `activeWeekView`)
+    syncWithSupabase();
+  }, [activeWeekView]);
 
   useEffect(() => {
     const loadScheduleFromSupabase = async () => {
@@ -650,6 +665,9 @@ function ScheduleContent() {
           if (info.customUniTimes) setCustomUniTimes(info.customUniTimes);
           if (info.subjects) setSubjects(info.subjects);
           if (info.blocks) setSchedule(info.blocks);
+
+          // Načteme, jaký týden byl naposledy aktivní (lichý/sudý)
+          if (info.activeWeekView) setActiveWeekView(info.activeWeekView);
 
           // Správné naplnění aktuálního view
           if (info.timeMode && info.customNormalTimes && info.customUniTimes) {
