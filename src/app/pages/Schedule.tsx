@@ -766,10 +766,17 @@ function ScheduleContent() {
     for (let i = 0; i < duration; i++) {
       const slot = targetTimeSlot + i;
       const occupying = schedule.find(c => c.day === targetDay && c.timeSlot <= slot && c.timeSlot + c.duration > slot);
-      if (occupying && occupying.id !== classId) return false; // Není tam už někdo jiný?
+      if (occupying && occupying.id !== classId) {
+        // Pokud je záznam pouze pro lichý/sudý týden a neodpovídá právě aktivnímu view,
+        // považujeme jej za "volný" (tj. neblokuje umístění nové hodiny).
+        if (occupying.week && occupying.week !== 'all' && occupying.week !== activeWeekView) {
+          continue; // ignorujeme tuto třídu, protože patří do jiného týdne
+        }
+        return false; // Není tam už někdo jiný pro tento týden
+      }
     }
     return true;
-  }, [schedule, timeSlots.length]);
+  }, [schedule, timeSlots.length, activeWeekView]);
 
   const handleHoverClass = useCallback((id: string, day: number, timeSlot: number) => {
     setSchedule(prev => prev.map(c => c.id === id ? { ...c, day, timeSlot } : c));
