@@ -501,6 +501,7 @@ function ScheduleContent() {
   // Pomocná reference pro jistotu, že funkce vždy vidí poslední data
   const scheduleRef = useRef(schedule);
   useEffect(() => { scheduleRef.current = schedule; }, [schedule]);
+  const hasLoadedRef = useRef(false); // Zabráníme prvotní automatické uložení při mountu
 
   // --- STAVY PRO IMPORT/EXPORT ROZVRHU ---
   const [showShareModal, setShowShareModal] = useState(false);
@@ -636,8 +637,10 @@ function ScheduleContent() {
 
   // Když uživatel změní zobrazený týden (lichý/sudý), ihned to uložíme do Supabase
   useEffect(() => {
-    // Voláme bez parametrů, funkce vezme aktuální stavy (`schedule`, `subjects`, `timeSlots`, `activeWeekView`)
-    syncWithSupabase();
+    // Uložíme jen pokud už proběhlo načtení ze serveru (jinak bychom přepsali DB prázdnými stavy)
+    if (hasLoadedRef.current) {
+      syncWithSupabase();
+    }
   }, [activeWeekView]);
 
   useEffect(() => {
@@ -679,6 +682,8 @@ function ScheduleContent() {
           
           console.log("Data úspěšně načtena z databáze.");
         }
+        // Označíme, že jsme dokončili počáteční načtení (i když nebyla žádná data)
+        hasLoadedRef.current = true;
       } catch (err) {
         console.error("Chyba při počátečním načítání:", err);
       }

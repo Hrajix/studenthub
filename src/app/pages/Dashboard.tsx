@@ -6,6 +6,7 @@ import { supabase } from "../../lib/supabase";
 export default function Dashboard() {
   const [schedule, setSchedule] = useState([]);
   const [timeSlots, setTimeSlots] = useState([]);
+  const [activeWeekView, setActiveWeekView] = useState<'odd' | 'even'>('odd');
 
   useEffect(() => {
     const fetchTodayData = async () => {
@@ -21,6 +22,7 @@ export default function Dashboard() {
       if (data?.schedule_info) {
         setSchedule(data.schedule_info.blocks || []);
         setTimeSlots(data.schedule_info.timeSlots || []);
+        setActiveWeekView(data.schedule_info.activeWeekView || 'odd');
       }
     };
 
@@ -34,14 +36,14 @@ export default function Dashboard() {
     const currentDayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
 
     return schedule
-      .filter((item) => item.day === currentDayIndex)
+      .filter((item) => item.day === currentDayIndex && (!item.week || item.week === 'all' || item.week === activeWeekView))
       .sort((a, b) => a.timeSlot - b.timeSlot)
       .map((item) => ({
         ...item,
         // Propojíme index slotu s reálným časem z timeSlots
         time: timeSlots[item.timeSlot] || "Neznámý čas",
       }));
-  }, [schedule, timeSlots]);
+  }, [schedule, timeSlots, activeWeekView]);
   // --------------------------------
 
   const upcomingTests = [
