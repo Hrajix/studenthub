@@ -35,13 +35,26 @@ export default function Dashboard() {
     // Převod: Neděle(0) -> 6, Pondělí(1) -> 0...
     const currentDayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
 
+    const formatTime = (slotIndex: number, duration?: number) => {
+      if (!Array.isArray(timeSlots) || timeSlots.length === 0) return "Neznámý čas";
+      const startIdx = Math.max(0, Math.min(slotIndex || 0, timeSlots.length - 1));
+      const startSlot = timeSlots[startIdx] || "";
+      if (!duration || duration <= 1) return startSlot || "Neznámý čas";
+      const endIdx = Math.min(startIdx + (duration - 1), timeSlots.length - 1);
+      const endSlot = timeSlots[endIdx] || "";
+      const startPart = (startSlot && startSlot.split("-")[0]) || startSlot;
+      const endPart = (endSlot && endSlot.split("-")[1]) || endSlot;
+      if (startPart && endPart) return `${startPart}-${endPart}`;
+      return startSlot || "Neznámý čas";
+    };
+
     return schedule
       .filter((item) => item.day === currentDayIndex && (!item.week || item.week === 'all' || item.week === activeWeekView))
       .sort((a, b) => a.timeSlot - b.timeSlot)
       .map((item) => ({
         ...item,
-        // Propojíme index slotu s reálným časem z timeSlots
-        time: timeSlots[item.timeSlot] || "Neznámý čas",
+        // Propojíme index slotu s reálným časem z timeSlots (bere v úvahu `duration`)
+        time: formatTime(item.timeSlot, (item as any).duration),
       }));
   }, [schedule, timeSlots, activeWeekView]);
   // --------------------------------
